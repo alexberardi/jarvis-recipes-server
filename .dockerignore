@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+.github
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+.venv
+venv/
+env/
+ENV/
+.mypy_cache
+.pytest_cache
+.coverage
+htmlcov/
+*.log
+
+# IDEs
+.idea
+.vscode
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+*.md
+!README.md
+PRDs/
+
+# Tests
+tests/
+pytest_output.log
+
+# Media/uploads (exclude from image, mount as volume instead)
+media/*
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Misc
+*.tmp
+*.bak
+.env*
+
