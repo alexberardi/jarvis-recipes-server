@@ -4,7 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
-# Install system dependencies and poetry in one layer
+# Install system dependencies
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
@@ -14,18 +14,18 @@ RUN apt-get update \
         tesseract-ocr \
         libtesseract-dev \
         libgl1 \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir poetry==1.7.1
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files and source code
-COPY pyproject.toml poetry.lock* README.md /app/
+# Copy all files needed for installation
+COPY pyproject.toml README.md /app/
 COPY jarvis_recipes /app/jarvis_recipes
 
-# Install all dependencies and the package, with aggressive cleanup
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --only main \
+# Install build backend first (required for poetry-core build system)
+RUN pip install --no-cache-dir "poetry-core>=2.0.0,<3.0.0"
+
+# Install the package and all dependencies using pip (PEP 621 compatible)
+RUN pip install --no-cache-dir . \
     && pip cache purge \
-    && rm -rf /root/.cache/pypoetry \
     && find /usr/local/lib/python3.11 -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true \
     && find /usr/local/lib/python3.11 -type f -name "*.pyc" -delete 2>/dev/null || true
 
@@ -35,9 +35,17 @@ COPY alembic.ini /app/
 COPY scripts /app/scripts
 COPY static_data /app/static_data
 
-# Verify critical commands are available
-RUN which alembic && which uvicorn && which python || \
-    (echo "ERROR: Missing required commands" && exit 1)
+# Verify critical commands are available (debug step)
+RUN echo "=== Checking installed commands ===" \
+    && which python && python --version \
+    && which pip && pip --version \
+    && echo "=== Checking for alembic ===" \
+    && which alembic || echo "alembic not in PATH" \
+    && echo "=== Checking for uvicorn ===" \
+    && which uvicorn || echo "uvicorn not in PATH" \
+    && echo "=== Listing installed packages ===" \
+    && pip list | grep -E "alembic|uvicorn|fastapi" || echo "packages not found" \
+    && echo "=== Verification complete ==="
 
 ENV EASY_OCR_MODEL_PATH=/root/.EasyOCR
 
