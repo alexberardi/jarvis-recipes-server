@@ -1,0 +1,23 @@
+{
+  "title_substrings": ["spicy beef bowls", "beef bowls"],
+  "ingredients": [
+    "ground beef",
+    "rice",
+    "soy sauce",
+    "honey",
+    "rice vinegar",
+    "sesame oil",
+    "green onions",
+    "ginger",
+    "cucumber",
+    "chili sauce"
+  ],
+  "steps": [
+    "cook rice",
+    "make sauce with soy honey vinegar sesame oil",
+    "cook beef with aromatics",
+    "add sauce and simmer",
+    "assemble bowls with rice beef veggies"
+  ]
+}
+

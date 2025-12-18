@@ -1,0 +1,19 @@
+{
+  "title_substrings": ["chicken", "mushroom"],
+  "ingredients": [
+    "chicken",
+    "mushrooms",
+    "garlic",
+    "butter",
+    "cream",
+    "herbs"
+  ],
+  "steps": [
+    "sear chicken",
+    "cook mushrooms",
+    "add garlic",
+    "make creamy sauce",
+    "return chicken to pan"
+  ]
+}
+

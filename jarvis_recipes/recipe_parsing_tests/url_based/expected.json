@@ -1,0 +1,86 @@
+{
+  "allrecipes_chicken_pot_pie": {
+    "title_substrings": ["chicken pot pie"],
+    "ingredients": [
+      "chicken",
+      "carrots",
+      "peas",
+      "celery",
+      "onion",
+      "butter",
+      "flour",
+      "chicken broth",
+      "milk",
+      "pie crust"
+    ],
+    "steps": [
+      "boil chicken with carrots peas celery",
+      "cook onion in butter",
+      "make roux with flour",
+      "add broth and milk",
+      "fill pie crust",
+      "bake until golden"
+    ]
+  },
+  "broccyourbody_pesto_orzo": {
+    "title_substrings": ["pesto orzo", "balsamic grilled chicken"],
+    "ingredients": [
+      "orzo",
+      "pesto",
+      "balsamic",
+      "chicken",
+      "tomatoes",
+      "cucumber",
+      "feta",
+      "olive oil"
+    ],
+    "steps": [
+      "cook orzo",
+      "grill chicken with balsamic",
+      "toss orzo with pesto",
+      "add tomatoes cucumber",
+      "add cheese"
+    ]
+  },
+  "rainbow_vegan_wellington": {
+    "title_substrings": ["vegan wellington", "mushroom wellington"],
+    "ingredients": [
+      "puff pastry",
+      "mushrooms",
+      "onion",
+      "garlic",
+      "spinach",
+      "walnuts",
+      "thyme",
+      "rosemary",
+      "dijon"
+    ],
+    "steps": [
+      "make mushroom duxelles",
+      "cook onion garlic herbs",
+      "add spinach",
+      "wrap in puff pastry",
+      "bake until golden"
+    ]
+  },
+  "foodnetwork_lima_beans_pork_chops": {
+    "title_substrings": ["pork chops", "lima beans"],
+    "ingredients": [
+      "pork chops",
+      "lima beans",
+      "onion",
+      "garlic",
+      "broth",
+      "salt",
+      "pepper"
+    ],
+    "steps": [
+      "brown pork chops",
+      "cook onion garlic",
+      "add lima beans",
+      "simmer with broth",
+      "serve"
+    ]
+  }
+}
+

@@ -1,0 +1,639 @@
+import base64
+import json
+import logging
+import re
+from typing import Any, Dict, List, Optional, Tuple
+
+import httpx
+
+from jarvis_recipes.app.core.config import get_settings
+from jarvis_recipes.app.schemas.ingestion import RecipeDraft
+
+logger = logging.getLogger(__name__)
+
+
+def _coerce_recipe_draft(obj: Any, source_type: str = "image") -> RecipeDraft:
+    """
+    Accepts various JSON shapes and coerces into RecipeDraft.
+    Expected shape is RecipeDraft; we also accept {"recipe": {...}} with keys:
+      name/title, description, ingredients[{label/name, quantity/unit, notes}], directions/steps[{text}], servings, prepTime/cookTime/totalTime
+    """
+    data = obj
+    def _strip_code_fence(text: str) -> str:
+        txt = text.strip()
+        if txt.startswith("```"):
+            # Remove leading fence with optional language tag
+            txt = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", txt, count=1)
+            # Remove trailing fence
+            txt = re.sub(r"\s*```$", "", txt, count=1).strip()
+        return txt
+
+    if isinstance(obj, str):
+        cleaned = _strip_code_fence(obj)
+        data = json.loads(cleaned)
+    if isinstance(data, dict) and "recipe" in data:
+        data = data["recipe"]
+    if isinstance(data, dict) and data.get("error"):
+        raise ValueError(f"LLM returned error: {data.get('error')}")
+    # If already valid, let pydantic handle it
+    try:
+        draft = RecipeDraft.model_validate(data)
+        draft.validate_minimums()
+        return draft
+    except Exception as exc:
+        logger.warning("LLM draft validation (direct) failed, attempting coercion: %s", exc)
+
+    if not isinstance(data, dict):
+        raise ValueError("LLM response is not a JSON object")
+
+    title = data.get("title") or data.get("name") or "Untitled"
+    description = data.get("description")
+    ingredients_in = data.get("ingredients") or []
+    steps_in = data.get("steps") or data.get("directions") or []
+
+    COMMON_UNITS = {
+        "tsp",
+        "teaspoon",
+        "teaspoons",
+        "tbsp",
+        "tablespoon",
+        "tablespoons",
+        "cup",
+        "cups",
+        "oz",
+        "ounce",
+        "ounces",
+        "lb",
+        "pound",
+        "pounds",
+        "g",
+        "gram",
+        "grams",
+        "kg",
+        "ml",
+        "l",
+        "liter",
+        "litre",
+        "pint",
+        "pt",
+        "quart",
+        "qt",
+        "gallon",
+        "gal",
+        "stick",
+        "clove",
+        "cloves",
+        "can",
+        "cans",
+        "package",
+        "packages",
+        "slice",
+        "slices",
+        "piece",
+        "pieces",
+        "inch",
+        "inches",
+    }
+
+    def _extract_qty_from_text(text: str) -> Optional[Tuple[str, Optional[str], str]]:
+        fraction_chars = "¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞"
+        qty_unit_re = re.compile(rf"^\s*([\d\s\/\.\-{fraction_chars}]+)\s+([A-Za-z][A-Za-z\.\-]*)\s+(.*)$")
+        qty_only_re = re.compile(rf"^\s*([\d\s\/\.\-{fraction_chars}]+)\s+(.*)$")
+        m = qty_unit_re.match(text)
+        if m:
+            qty = m.group(1).strip()
+            unit = m.group(2).strip().lower()
+            name_rest = m.group(3).strip()
+            if unit in COMMON_UNITS:
+                return qty, unit, name_rest
+        m = qty_only_re.match(text)
+        if m:
+            qty = m.group(1).strip()
+            name_rest = m.group(2).strip()
+            return qty, None, name_rest
+        return None
+
+    ingredients = []
+    for ing in ingredients_in:
+        if not isinstance(ing, dict):
+            continue
+        qty = ing.get("quantity") or ing.get("quantity_display")
+        unit = ing.get("unit")
+        # If quantity is a dict like {"value": 1.5, "unit": "cups"}, flatten it
+        if isinstance(qty, dict):
+            val = qty.get("value")
+            unit = unit or qty.get("unit")
+            if val is not None:
+                try:
+                    qty = str(val)
+                except Exception:
+                    qty = None
+        elif qty is not None and not isinstance(qty, str):
+            try:
+                qty = str(qty)
+            except Exception:
+                qty = None
+        name_val = ing.get("name") or ing.get("label") or ""
+        ingredients.append(
+            {
+                "name": name_val,
+                "quantity": qty,
+                "unit": unit,
+                "notes": ing.get("notes"),
+            }
+        )
+
+    steps = []
+    for st in steps_in:
+        if isinstance(st, dict):
+            step_text = st.get("text") or st.get("description") or st.get("label") or ""
+            step_text = step_text.strip()
+            if step_text:
+                steps.append(step_text)
+        elif isinstance(st, str):
+            step_text = st.strip()
+            if step_text:
+                steps.append(step_text)
+
+    # Handle time fields with fallbacks
+    prep_time = data.get("prep_time_minutes") or data.get("prepTime")
+    cook_time = data.get("cook_time_minutes") or data.get("cookTime")
+    total_time = data.get("total_time_minutes") or data.get("totalTime")
+    active_time = data.get("activeTime") or data.get("active_time_minutes")
+
+    # If cook_time is missing but active_time or total_time exists, use them conservatively
+    if cook_time is None:
+        cook_time = active_time or total_time or 0
+    if prep_time is None:
+        prep_time = 0
+    if total_time is None and prep_time is not None and cook_time is not None:
+        try:
+            total_time = float(prep_time) + float(cook_time)
+        except Exception:
+            total_time = 0
+
+    # Normalize ingredients: if quantity is empty but name starts with qty/unit, split it out
+    normalized_ingredients = []
+    for ing in ingredients:
+        qty = ing["quantity"]
+        unit = ing["unit"]
+        name = ing["name"] or ""
+        if (not qty) and name:
+            extracted = _extract_qty_from_text(name)
+            if extracted:
+                qty, unit_extracted, name_rest = extracted
+                unit = unit or unit_extracted
+                name = name_rest or name
+        normalized_ingredients.append(
+            {"name": name, "quantity": qty, "unit": unit, "notes": ing.get("notes")}
+        )
+
+    draft_data = {
+        "title": title,
+        "description": description,
+        "ingredients": normalized_ingredients,
+        "steps": steps,
+        "prep_time_minutes": prep_time if prep_time is not None else 0,
+        "cook_time_minutes": cook_time if cook_time is not None else 0,
+        "total_time_minutes": total_time if total_time is not None else 0,
+        "servings": data.get("servings"),
+        "tags": data.get("tags") or [],
+        "source": {"type": source_type},
+    }
+    draft = RecipeDraft.model_validate(draft_data)
+    draft.validate_minimums()
+    return draft
+
+
+def _fallback_draft(reason: str, source_type: str = "image") -> RecipeDraft:
+    # Provide a minimal, user-editable draft to avoid failing the ingestion entirely.
+    placeholders = [
+        {"name": "Add ingredient", "quantity": None, "unit": None, "notes": reason},
+        {"name": "Add ingredient", "quantity": None, "unit": None, "notes": reason},
+        {"name": "Add ingredient", "quantity": None, "unit": None, "notes": reason},
+    ]
+    steps = ["Add steps manually", "Add steps manually"]
+    draft_data = {
+        "title": "Untitled",
+        "description": None,
+        "ingredients": placeholders,
+        "steps": steps,
+        "prep_time_minutes": 0,
+        "cook_time_minutes": 0,
+        "total_time_minutes": 0,
+        "servings": None,
+        "tags": [],
+        "source": {"type": source_type},
+    }
+    draft = RecipeDraft.model_validate(draft_data)
+    return draft
+
+
+def _try_local_json_repair(raw: str) -> Optional[str]:
+    cleaned = raw.strip()
+    cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", cleaned)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    if cleaned.startswith("{") and cleaned.endswith("}"):
+        try:
+            json.loads(cleaned)
+            return cleaned
+        except Exception:
+            pass
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        snippet = cleaned[start : end + 1]
+        try:
+            json.loads(snippet)
+            return snippet
+        except Exception:
+            return None
+    return None
+
+
+async def _repair_json_via_full_llm(broken_json: str, schema_hint: str, timeout_seconds: int = 60) -> Optional[str]:
+    settings = get_settings()
+    payload = {
+        "model": settings.llm_full_model_name or "full",
+        "temperature": 0.0,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You repair malformed JSON to match the given schema. "
+                    "Return ONLY valid JSON. No markdown, no code fences."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Schema: {schema_hint}\n"
+                    f"Malformed JSON:\n{broken_json}\n"
+                    "Return valid JSON only."
+                ),
+            },
+        ],
+        "max_tokens": 800,
+        "stream": False,
+    }
+    timeout = httpx.Timeout(timeout_seconds, read=timeout_seconds, connect=10.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.post(
+            f"{settings.llm_base_url}/v1/chat/completions",
+            json=payload,
+            headers=_headers(),
+        )
+    if resp.status_code >= 400:
+        return None
+    data = resp.json()
+    content = data.get("choices", [{}])[0].get("message", {}).get("content")
+    if not content:
+        return None
+    repaired = content.strip()
+    repaired = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", repaired)
+    repaired = re.sub(r"\s*```$", "", repaired)
+    try:
+        json.loads(repaired)
+        return repaired
+    except Exception:
+        return None
+
+
+def _headers() -> Dict[str, str]:
+    settings = get_settings()
+    if not settings.llm_app_id or not settings.llm_app_key:
+        raise ValueError("LLM app credentials are not configured")
+    return {
+        "Content-Type": "application/json",
+        "X-Jarvis-App-Id": settings.llm_app_id,
+        "X-Jarvis-App-Key": settings.llm_app_key,
+    }
+
+
+async def _parse_with_repair(raw_content: str, source_type: str) -> RecipeDraft:
+    try:
+        return _coerce_recipe_draft(raw_content, source_type=source_type)
+    except Exception:
+        repaired = _try_local_json_repair(raw_content)
+        if repaired:
+            try:
+                return _coerce_recipe_draft(repaired, source_type=source_type)
+            except Exception:
+                pass
+        schema_hint = (
+            '{ "title": string, "description": string|null, "ingredients": '
+            '[{"name": string, "quantity": string|null, "unit": string|null, "notes": string|null}], '
+            '"steps": [string], "prep_time_minutes": number, "cook_time_minutes": number, '
+            '"total_time_minutes": number, "servings": string|number|null, "tags": [string], '
+            '"source": {"type":"image"|"ocr"|"url", "source_url": string|null, "image_url": string|null} }'
+        )
+        repaired_llm = await _repair_json_via_full_llm(raw_content, schema_hint)
+        if repaired_llm:
+            return _coerce_recipe_draft(repaired_llm, source_type=source_type)
+        raise
+
+
+async def call_text_structuring(text: str, model_name: str) -> RecipeDraft:
+    settings = get_settings()
+    payload = {
+        "model": model_name or settings.llm_full_model_name or "full",
+        "temperature": 0.0,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You convert OCR'd recipe text into strict JSON matching the RecipeDraft schema. "
+                    "Return ONLY JSON, no markdown or prose. "
+                    "If the text is not a coherent recipe (no clear title, fewer than 2 ingredients or 2 steps, or largely gibberish), "
+                    "return {\"error\":\"garbage_ocr\"}. "
+                    "If you cannot produce valid JSON for other reasons, return {\"error\":\"invalid\"}."
+                ),
+            },
+            {"role": "user", "content": text},
+        ],
+        "max_tokens": 800,
+        "stream": False,
+    }
+    timeout = httpx.Timeout(60.0, read=60.0, connect=10.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.post(
+            f"{settings.llm_base_url}/v1/chat/completions",
+            json=payload,
+            headers=_headers(),
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    content = data.get("choices", [{}])[0].get("message", {}).get("content")
+    logger.info("text llm raw content: %s", content if isinstance(content, str) else str(content))
+    if not content:
+        raise ValueError("LLM text structuring missing content")
+    raw_content = content if isinstance(content, str) else str(content)
+    return await _parse_with_repair(raw_content, source_type="ocr")
+
+
+async def call_meal_plan_select(
+    slot: Dict[str, Any],
+    preferences: Dict[str, Any],
+    recent_meals: List[Dict[str, Any]],
+    candidates: List[Dict[str, Any]],
+    model_name: Optional[str] = None,
+    timeout_seconds: int = 30,
+) -> Dict[str, Any]:
+    """
+    Invoke LLM to select the best recipe from candidates for a meal slot.
+    
+    Returns:
+        {
+            "selected_recipe_id": str|None,
+            "confidence": float (0.0-1.0),
+            "reason": str (optional),
+            "warnings": [str]
+        }
+    """
+    settings = get_settings()
+    
+    # Build candidate summaries (limit detail for token efficiency)
+    candidate_summaries = [
+        {
+            "recipe_id": c.get("id"),
+            "title": c.get("title"),
+            "tags": c.get("tags", []),
+            "prep_time": c.get("prep_time_minutes"),
+            "cook_time": c.get("cook_time_minutes"),
+            "summary": c.get("description", "")[:100] if c.get("description") else None,
+        }
+        for c in candidates[:25]
+    ]
+    
+    prompt_input = {
+        "slot": slot,
+        "preferences": preferences,
+        "recent_meals": recent_meals,
+        "candidates": candidate_summaries,
+    }
+    
+    system_prompt = (
+        "You are a meal planning assistant that selects and ranks recipes from a provided candidate list. "
+        "Your job is to interpret user intent (notes, tags, preferences), encourage variety using recent meal history, "
+        "and return the TOP 3 RANKED recipes that best fit the slot. "
+        "\n\nRULES:\n"
+        "- Return your TOP 3 recipe choices in ranked order (best first).\n"
+        "- You MUST select recipe_ids from the provided candidates list.\n"
+        "- You MUST NOT invent, create, or select recipes not in the candidates list.\n"
+        "- Prefer to suggest options over nothing - even if not perfect matches.\n"
+        "- ONLY return null for the primary selection if candidates are truly incompatible (e.g., user wants vegan but all candidates have meat).\n"
+        "- Variety is a soft constraint: prefer different recipes/proteins across consecutive days when alternatives exist.\n"
+        "- Interpret free-text notes (e.g., 'something easy', 'I want chicken') as ranking signals, not hard requirements.\n"
+        "- Tags and preferences are guidance, not absolute filters - be flexible and helpful.\n"
+        "- Use confidence scores to indicate match quality: 0.9-1.0 = excellent, 0.7-0.9 = good, 0.5-0.7 = acceptable, <0.5 = poor.\n"
+        "- For each ranked option, provide a brief reason explaining why it's a good choice.\n"
+        "- Return ONLY valid JSON matching this schema:\n"
+        '  { "ranked_recipes": [{"recipe_id": "string", "confidence": 0.0-1.0, "reason": "why this fits"}], '
+        '"warnings": ["optional warning strings"] }\n'
+        "- The ranked_recipes array should contain 1-3 recipes in priority order.\n"
+        "- If no candidates fit at all, return ranked_recipes as an empty array with warnings explaining why."
+    )
+    
+    user_prompt = (
+        f"Select the best recipe for this meal slot:\n{json.dumps(prompt_input, indent=2)}\n\n"
+        "Return your selection as JSON only. No prose, no markdown."
+    )
+    
+    payload = {
+        "model": model_name or settings.llm_full_model_name or "full",
+        "temperature": 0.2,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "max_tokens": 300,
+        "stream": False,
+    }
+    
+    timeout = httpx.Timeout(timeout_seconds, read=timeout_seconds, connect=10.0)
+    
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{settings.llm_base_url}/v1/chat/completions",
+                json=payload,
+                headers=_headers(),
+            )
+        
+        if resp.status_code >= 400:
+            logger.warning("Meal plan LLM selection failed with status %s", resp.status_code)
+            return {
+                "selected_recipe_id": None,
+                "confidence": 0.0,
+                "reason": f"LLM request failed: {resp.status_code}",
+                "warnings": ["LLM unavailable"],
+            }
+        
+        data = resp.json()
+        content = data.get("choices", [{}])[0].get("message", {}).get("content")
+        
+        if not content:
+            logger.warning("Meal plan LLM returned empty content")
+            return {
+                "selected_recipe_id": None,
+                "confidence": 0.0,
+                "reason": "LLM returned empty response",
+                "warnings": ["Empty LLM response"],
+                "alternatives": [],
+            }
+        
+        # Parse and validate
+        result = json.loads(content)
+        
+        # Extract ranked recipes and warnings
+        ranked_recipes = result.get("ranked_recipes", [])
+        warnings = result.get("warnings", [])
+        
+        # Validate all recipe IDs are in candidates
+        candidate_ids = {c.get("id") for c in candidates}
+        validated_ranked = []
+        
+        for idx, ranked in enumerate(ranked_recipes[:3]):  # Max 3
+            recipe_id = ranked.get("recipe_id")
+            if recipe_id and recipe_id in candidate_ids:
+                confidence = ranked.get("confidence", 0.5)
+                if not isinstance(confidence, (int, float)) or confidence < 0 or confidence > 1:
+                    confidence = 0.5
+                
+                validated_ranked.append({
+                    "recipe_id": recipe_id,
+                    "confidence": float(confidence),
+                    "reason": ranked.get("reason", ""),
+                })
+            else:
+                logger.warning(
+                    "LLM ranked recipe_id=%s not in candidates, skipping",
+                    recipe_id,
+                )
+        
+        # If no valid ranked recipes, return null selection
+        if not validated_ranked:
+            return {
+                "selected_recipe_id": None,
+                "confidence": 0.0,
+                "reason": "No valid recipes returned by LLM",
+                "warnings": warnings + ["LLM returned no valid selections"],
+                "alternatives": [],
+            }
+        
+        # Primary selection is the first ranked recipe
+        primary = validated_ranked[0]
+        alternatives = validated_ranked[1:]  # Rest are alternatives
+        
+        return {
+            "selected_recipe_id": primary["recipe_id"],
+            "confidence": primary["confidence"],
+            "reason": primary["reason"],
+            "warnings": warnings,
+            "alternatives": alternatives,  # List of {recipe_id, confidence, reason}
+        }
+    
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Meal plan LLM selection exception: %s", exc)
+        return {
+            "selected_recipe_id": None,
+            "confidence": 0.0,
+            "reason": f"Exception: {exc}",
+            "warnings": ["LLM error"],
+            "alternatives": [],
+        }
+
+
+async def call_vision_single(
+    image: bytes,
+    model_name: str,
+    current_draft: Dict[str, Any],
+    image_index: int,
+    image_count: int,
+    is_final_image: bool,
+    title_hint: Optional[str] = None,
+    timeout_seconds: int = 180,
+) -> Tuple[RecipeDraft, List[str]]:
+    settings = get_settings()
+    b64_image = {
+        "type": "image_url",
+        "image_url": {"url": f"data:image/jpeg;base64,{base64.b64encode(image).decode()}"},
+    }
+    user_content = [
+        {
+            "type": "text",
+            "text": (
+                "You will update the current recipe draft using ONLY the provided image. "
+                "Return ONLY valid JSON for the recipe. If you cannot produce valid JSON, return {\"error\":\"invalid\"}."
+            ),
+        }
+    ] + [b64_image]
+    payload = {
+        "model": model_name or settings.llm_vision_model_name or "vision",
+        "temperature": 0.0,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are extracting a cooking recipe from images, one image at a time. "
+                    "You will receive a JSON draft and one image. Update the draft using only the information visible in the image. "
+                    "Preserve existing fields unless contradicted by clear evidence. Deduplicate ingredients and steps. "
+                    "Return ONLY valid JSON for the full recipe draft. No markdown or commentary. "
+                    'If you cannot produce valid JSON, return {"error":"invalid"}.'
+                ),
+            },
+            {
+                "role": "user",
+                "content": user_content,
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": json.dumps({
+                        "current_draft": current_draft,
+                        "image_index": image_index,
+                        "image_count": image_count,
+                        "is_final_image": is_final_image,
+                        "title_hint": title_hint,
+                    })}
+                ],
+            },
+        ],
+        "max_tokens": 1000,
+        "stream": False,
+    }
+    timeout = httpx.Timeout(timeout_seconds, read=timeout_seconds, connect=20.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.post(
+            f"{settings.llm_base_url}/v1/chat/completions",
+            json=payload,
+            headers=_headers(),
+        )
+    if resp.status_code >= 400:
+        body = resp.text
+        logger.error(
+            "vision llm request failed: status=%s images=%s total_image_bytes=%s body=%s",
+            resp.status_code,
+            1,
+            len(image),
+            body[:4000],
+        )
+        resp.raise_for_status()
+    data = resp.json()
+    content = data.get("choices", [{}])[0].get("message", {}).get("content")
+    logger.info("vision llm raw content: %s", content if isinstance(content, str) else str(content))
+    if not content:
+        raise ValueError("LLM vision missing content")
+    raw_content = content if isinstance(content, str) else str(content)
+    try:
+        parsed = await _parse_with_repair(raw_content, source_type="image")
+        return parsed, []
+    except Exception as exc:  # noqa: BLE001
+        warning = str(exc)
+        logger.warning("Vision LLM returned error, using fallback draft: %s", warning)
+        fallback = _fallback_draft(warning, source_type="image")
+        return fallback, [warning]
+

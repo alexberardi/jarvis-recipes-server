@@ -1,0 +1,21 @@
+{
+  "title_substrings": ["sheet-pan lasagna", "all-crust lasagna"],
+  "ingredients": [
+    "lasagna noodles",
+    "ricotta",
+    "mozzarella",
+    "parmesan",
+    "sausage",
+    "garlic",
+    "tomato sauce",
+    "basil"
+  ],
+  "steps": [
+    "preheat oven",
+    "cook sausage",
+    "cook garlic",
+    "layer noodles sauce cheese",
+    "bake until browned"
+  ]
+}
+

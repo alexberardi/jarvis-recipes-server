@@ -1,0 +1,19 @@
+{
+  "title_substrings": ["creamy shells", "one pot"],
+  "ingredients": [
+    "pasta shells",
+    "ground meat",
+    "garlic",
+    "cream",
+    "parmesan",
+    "spinach"
+  ],
+  "steps": [
+    "brown meat",
+    "add garlic",
+    "add shells with liquid",
+    "simmer until tender",
+    "add cream and cheese"
+  ]
+}
+

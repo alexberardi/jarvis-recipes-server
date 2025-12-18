@@ -1,0 +1,4321 @@
+[
+  {
+    "id": "stock-001",
+    "title": "Scrambled Eggs",
+    "description": "Delicious scrambled eggs.",
+    "prep_time_minutes": 3,
+    "cook_time_minutes": 5,
+    "tags": [
+      "breakfast",
+      "quick",
+      "protein"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-002",
+    "title": "French Toast",
+    "description": "Delicious french toast.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 10,
+    "tags": [
+      "breakfast",
+      "sweet",
+      "kid_friendly"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-003",
+    "title": "Breakfast Burrito",
+    "description": "Delicious breakfast burrito.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 10,
+    "tags": [
+      "breakfast",
+      "protein",
+      "wrap"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-004",
+    "title": "Smoothie Bowl",
+    "description": "Delicious smoothie bowl.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 0,
+    "tags": [
+      "breakfast",
+      "healthy",
+      "no_cook"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-005",
+    "title": "Bagel with Cream Cheese",
+    "description": "Delicious bagel with cream cheese.",
+    "prep_time_minutes": 3,
+    "cook_time_minutes": 2,
+    "tags": [
+      "breakfast",
+      "quick",
+      "no_cook"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-006",
+    "title": "Breakfast Sandwich",
+    "description": "Delicious breakfast sandwich.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 8,
+    "tags": [
+      "breakfast",
+      "protein",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-007",
+    "title": "Waffles",
+    "description": "Delicious waffles.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 12,
+    "tags": [
+      "breakfast",
+      "sweet",
+      "kid_friendly"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-008",
+    "title": "Huevos Rancheros",
+    "description": "Delicious huevos rancheros.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "breakfast",
+      "mexican",
+      "protein"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-009",
+    "title": "Chia Pudding",
+    "description": "Delicious chia pudding.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 0,
+    "tags": [
+      "breakfast",
+      "meal_prep",
+      "vegan"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-010",
+    "title": "Breakfast Quesadilla",
+    "description": "Delicious breakfast quesadilla.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 8,
+    "tags": [
+      "breakfast",
+      "cheese",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-011",
+    "title": "Egg Muffins",
+    "description": "Delicious egg muffins.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 20,
+    "tags": [
+      "breakfast",
+      "meal_prep",
+      "protein"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-012",
+    "title": "Granola Parfait",
+    "description": "Delicious granola parfait.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 0,
+    "tags": [
+      "breakfast",
+      "no_cook",
+      "healthy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-013",
+    "title": "Protein Pancakes",
+    "description": "Delicious protein pancakes.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 10,
+    "tags": [
+      "breakfast",
+      "protein",
+      "healthy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-014",
+    "title": "Breakfast Hash",
+    "description": "Delicious breakfast hash.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 20,
+    "tags": [
+      "breakfast",
+      "potato",
+      "one_pan"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-015",
+    "title": "Crepes",
+    "description": "Delicious crepes.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "breakfast",
+      "sweet",
+      "special"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-016",
+    "title": "Club Sandwich",
+    "description": "Tasty club sandwich.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 0,
+    "tags": [
+      "lunch",
+      "sandwich",
+      "no_cook"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-017",
+    "title": "Chicken Wrap",
+    "description": "Tasty chicken wrap.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 0,
+    "tags": [
+      "lunch",
+      "wrap",
+      "protein"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-018",
+    "title": "Soup and Salad Combo",
+    "description": "Tasty soup and salad combo.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "lunch",
+      "healthy",
+      "light"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-019",
+    "title": "Panini",
+    "description": "Tasty panini.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 8,
+    "tags": [
+      "lunch",
+      "sandwich",
+      "cheese"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-020",
+    "title": "Buddha Bowl",
+    "description": "Tasty buddha bowl.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 15,
+    "tags": [
+      "lunch",
+      "bowl",
+      "healthy",
+      "vegan"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-021",
+    "title": "Ramen Bowl",
+    "description": "Tasty ramen bowl.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 10,
+    "tags": [
+      "lunch",
+      "noodles",
+      "asian"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-022",
+    "title": "Poke Bowl",
+    "description": "Tasty poke bowl.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 0,
+    "tags": [
+      "lunch",
+      "seafood",
+      "bowl",
+      "no_cook"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-023",
+    "title": "Falafel Wrap",
+    "description": "Tasty falafel wrap.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "lunch",
+      "vegan",
+      "wrap"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-024",
+    "title": "Chicken Salad Croissant",
+    "description": "Tasty chicken salad croissant.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 0,
+    "tags": [
+      "lunch",
+      "sandwich",
+      "no_cook"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-025",
+    "title": "Tomato Soup",
+    "description": "Tasty tomato soup.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 20,
+    "tags": [
+      "lunch",
+      "soup",
+      "vegetarian"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-026",
+    "title": "Minestrone",
+    "description": "Tasty minestrone.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 25,
+    "tags": [
+      "lunch",
+      "soup",
+      "vegetarian"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-027",
+    "title": "French Onion Soup",
+    "description": "Tasty french onion soup.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 30,
+    "tags": [
+      "lunch",
+      "soup",
+      "cheese"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-028",
+    "title": "Cobb Salad",
+    "description": "Tasty cobb salad.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 0,
+    "tags": [
+      "lunch",
+      "salad",
+      "protein"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-029",
+    "title": "Nicoise Salad",
+    "description": "Tasty nicoise salad.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 10,
+    "tags": [
+      "lunch",
+      "salad",
+      "seafood"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-030",
+    "title": "Asian Chicken Salad",
+    "description": "Tasty asian chicken salad.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 0,
+    "tags": [
+      "lunch",
+      "salad",
+      "protein"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-031",
+    "title": "Grain Bowl",
+    "description": "Tasty grain bowl.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 15,
+    "tags": [
+      "lunch",
+      "bowl",
+      "healthy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-032",
+    "title": "Sushi Bowl",
+    "description": "Tasty sushi bowl.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 0,
+    "tags": [
+      "lunch",
+      "bowl",
+      "seafood",
+      "asian"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-033",
+    "title": "Pho",
+    "description": "Tasty pho.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 30,
+    "tags": [
+      "lunch",
+      "soup",
+      "noodles",
+      "asian"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-034",
+    "title": "Banh Mi",
+    "description": "Tasty banh mi.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 5,
+    "tags": [
+      "lunch",
+      "sandwich",
+      "asian"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-035",
+    "title": "Cuban Sandwich",
+    "description": "Tasty cuban sandwich.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 10,
+    "tags": [
+      "lunch",
+      "sandwich",
+      "pork"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-036",
+    "title": "Chicken Parmesan",
+    "description": "Flavorful chicken parmesan.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "chicken",
+      "italian",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-037",
+    "title": "Grilled Chicken Breast",
+    "description": "Flavorful grilled chicken breast.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "chicken",
+      "healthy",
+      "gluten_free"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-038",
+    "title": "Chicken Tikka Masala",
+    "description": "Flavorful chicken tikka masala.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "chicken",
+      "indian",
+      "curry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-039",
+    "title": "Lemon Chicken",
+    "description": "Flavorful lemon chicken.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "chicken",
+      "easy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-040",
+    "title": "BBQ Chicken",
+    "description": "Flavorful bbq chicken.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "chicken",
+      "grill"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-041",
+    "title": "Chicken Stir-Fry",
+    "description": "Flavorful chicken stir-fry.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "chicken",
+      "stir_fry",
+      "asian"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-042",
+    "title": "Chicken Enchiladas",
+    "description": "Flavorful chicken enchiladas.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "chicken",
+      "mexican",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-043",
+    "title": "Roast Chicken",
+    "description": "Flavorful roast chicken.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 60,
+    "tags": [
+      "dinner",
+      "chicken",
+      "sunday_dinner"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-044",
+    "title": "Chicken Cacciatore",
+    "description": "Flavorful chicken cacciatore.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 35,
+    "tags": [
+      "dinner",
+      "chicken",
+      "italian",
+      "stovetop"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-045",
+    "title": "Chicken Marsala",
+    "description": "Flavorful chicken marsala.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "chicken",
+      "italian",
+      "wine"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-046",
+    "title": "Orange Chicken",
+    "description": "Flavorful orange chicken.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "chicken",
+      "asian",
+      "sweet"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-047",
+    "title": "Chicken Piccata",
+    "description": "Flavorful chicken piccata.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "chicken",
+      "italian",
+      "lemon"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-048",
+    "title": "Chicken Curry",
+    "description": "Flavorful chicken curry.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "chicken",
+      "indian",
+      "curry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-049",
+    "title": "Fried Chicken",
+    "description": "Flavorful fried chicken.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "chicken",
+      "comfort",
+      "crispy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-050",
+    "title": "Chicken Pot Pie",
+    "description": "Flavorful chicken pot pie.",
+    "prep_time_minutes": 25,
+    "cook_time_minutes": 35,
+    "tags": [
+      "dinner",
+      "chicken",
+      "comfort",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-051",
+    "title": "Chicken Shawarma",
+    "description": "Flavorful chicken shawarma.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "chicken",
+      "middle_eastern"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-052",
+    "title": "Jerk Chicken",
+    "description": "Flavorful jerk chicken.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "chicken",
+      "caribbean",
+      "spicy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-053",
+    "title": "Chicken Souvlaki",
+    "description": "Flavorful chicken souvlaki.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "chicken",
+      "greek",
+      "grill"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-054",
+    "title": "Chicken Satay",
+    "description": "Flavorful chicken satay.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "chicken",
+      "asian",
+      "grill"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-055",
+    "title": "Buffalo Chicken",
+    "description": "Flavorful buffalo chicken.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "chicken",
+      "spicy",
+      "american"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve hot."
+    ]
+  },
+  {
+    "id": "stock-056",
+    "title": "Beef Stew",
+    "description": "Hearty beef stew.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 120,
+    "tags": [
+      "dinner",
+      "beef",
+      "stew",
+      "comfort"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-057",
+    "title": "Meatloaf",
+    "description": "Hearty meatloaf.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 60,
+    "tags": [
+      "dinner",
+      "beef",
+      "comfort",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-058",
+    "title": "Spaghetti Bolognese",
+    "description": "Hearty spaghetti bolognese.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "beef",
+      "italian",
+      "pasta"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-059",
+    "title": "Beef Stroganoff",
+    "description": "Hearty beef stroganoff.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "beef",
+      "russian",
+      "pasta"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-060",
+    "title": "Steak Frites",
+    "description": "Hearty steak frites.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "beef",
+      "french",
+      "grill"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-061",
+    "title": "Beef and Broccoli",
+    "description": "Hearty beef and broccoli.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "beef",
+      "asian",
+      "stir_fry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-062",
+    "title": "Shepherd's Pie",
+    "description": "Hearty shepherd's pie.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "beef",
+      "comfort",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-063",
+    "title": "Beef Fajitas",
+    "description": "Hearty beef fajitas.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "beef",
+      "mexican",
+      "skillet"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-064",
+    "title": "Pot Roast",
+    "description": "Hearty pot roast.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 180,
+    "tags": [
+      "dinner",
+      "beef",
+      "slow_cooker",
+      "comfort"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-065",
+    "title": "Beef Bourguignon",
+    "description": "Hearty beef bourguignon.",
+    "prep_time_minutes": 25,
+    "cook_time_minutes": 150,
+    "tags": [
+      "dinner",
+      "beef",
+      "french",
+      "wine"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-066",
+    "title": "Korean Beef Bowl",
+    "description": "Hearty korean beef bowl.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 10,
+    "tags": [
+      "dinner",
+      "beef",
+      "asian",
+      "bowl"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-067",
+    "title": "Mongolian Beef",
+    "description": "Hearty mongolian beef.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "beef",
+      "asian",
+      "stir_fry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-068",
+    "title": "Beef Kebabs",
+    "description": "Hearty beef kebabs.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "beef",
+      "grill",
+      "middle_eastern"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-069",
+    "title": "Carne Asada",
+    "description": "Hearty carne asada.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "beef",
+      "mexican",
+      "grill"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-070",
+    "title": "Beef Wellington",
+    "description": "Hearty beef wellington.",
+    "prep_time_minutes": 45,
+    "cook_time_minutes": 40,
+    "tags": [
+      "dinner",
+      "beef",
+      "special",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-071",
+    "title": "Swiss Steak",
+    "description": "Hearty swiss steak.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 90,
+    "tags": [
+      "dinner",
+      "beef",
+      "comfort",
+      "stovetop"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-072",
+    "title": "Beef Ragu",
+    "description": "Hearty beef ragu.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 120,
+    "tags": [
+      "dinner",
+      "beef",
+      "italian",
+      "pasta"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-073",
+    "title": "Salisbury Steak",
+    "description": "Hearty salisbury steak.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "beef",
+      "comfort",
+      "gravy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-074",
+    "title": "Beef Empanadas",
+    "description": "Hearty beef empanadas.",
+    "prep_time_minutes": 30,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "beef",
+      "latin",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-075",
+    "title": "Beef Pho",
+    "description": "Hearty beef pho.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 180,
+    "tags": [
+      "dinner",
+      "beef",
+      "vietnamese",
+      "soup"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook thoroughly.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-076",
+    "title": "Shrimp Scampi",
+    "description": "Fresh shrimp scampi.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 10,
+    "tags": [
+      "dinner",
+      "seafood",
+      "italian",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-077",
+    "title": "Fish and Chips",
+    "description": "Fresh fish and chips.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "seafood",
+      "british",
+      "fried"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-078",
+    "title": "Paella",
+    "description": "Fresh paella.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 35,
+    "tags": [
+      "dinner",
+      "seafood",
+      "spanish",
+      "rice"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-079",
+    "title": "Cioppino",
+    "description": "Fresh cioppino.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "seafood",
+      "italian",
+      "soup"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-080",
+    "title": "Blackened Fish",
+    "description": "Fresh blackened fish.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 10,
+    "tags": [
+      "dinner",
+      "seafood",
+      "cajun",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-081",
+    "title": "Crab Cakes",
+    "description": "Fresh crab cakes.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "seafood",
+      "american",
+      "fried"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-082",
+    "title": "Lobster Roll",
+    "description": "Fresh lobster roll.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 10,
+    "tags": [
+      "dinner",
+      "seafood",
+      "american",
+      "sandwich"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-083",
+    "title": "Shrimp Tacos",
+    "description": "Fresh shrimp tacos.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 10,
+    "tags": [
+      "dinner",
+      "seafood",
+      "mexican",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-084",
+    "title": "Tuna Steak",
+    "description": "Fresh tuna steak.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 8,
+    "tags": [
+      "dinner",
+      "seafood",
+      "grill",
+      "healthy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-085",
+    "title": "Mussels Marinara",
+    "description": "Fresh mussels marinara.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "seafood",
+      "italian",
+      "stovetop"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-086",
+    "title": "Coconut Shrimp",
+    "description": "Fresh coconut shrimp.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "seafood",
+      "asian",
+      "fried"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-087",
+    "title": "Grilled Swordfish",
+    "description": "Fresh grilled swordfish.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "seafood",
+      "grill",
+      "healthy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-088",
+    "title": "Shrimp Fried Rice",
+    "description": "Fresh shrimp fried rice.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "seafood",
+      "asian",
+      "stir_fry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-089",
+    "title": "Fish Curry",
+    "description": "Fresh fish curry.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "seafood",
+      "indian",
+      "curry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-090",
+    "title": "Ceviche",
+    "description": "Fresh ceviche.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 0,
+    "tags": [
+      "dinner",
+      "seafood",
+      "latin",
+      "no_cook"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-091",
+    "title": "Scallops with Risotto",
+    "description": "Fresh scallops with risotto.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "seafood",
+      "italian",
+      "fancy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-092",
+    "title": "Jambalaya",
+    "description": "Fresh jambalaya.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 35,
+    "tags": [
+      "dinner",
+      "seafood",
+      "cajun",
+      "rice"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-093",
+    "title": "Shrimp Pad Thai",
+    "description": "Fresh shrimp pad thai.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "seafood",
+      "thai",
+      "noodles"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-094",
+    "title": "Fish Tacos with Slaw",
+    "description": "Fresh fish tacos with slaw.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "seafood",
+      "mexican",
+      "fresh"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-095",
+    "title": "Teriyaki Salmon",
+    "description": "Fresh teriyaki salmon.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "seafood",
+      "asian",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook carefully.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-096",
+    "title": "Pork Chops with Apples",
+    "description": "Savory pork chops with apples.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "pork",
+      "american",
+      "stovetop"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-097",
+    "title": "Pulled Pork",
+    "description": "Savory pulled pork.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 480,
+    "tags": [
+      "dinner",
+      "pork",
+      "bbq",
+      "slow_cooker"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-098",
+    "title": "Pork Tenderloin",
+    "description": "Savory pork tenderloin.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "pork",
+      "roast",
+      "elegant"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-099",
+    "title": "Pork Fried Rice",
+    "description": "Savory pork fried rice.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "pork",
+      "asian",
+      "stir_fry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-100",
+    "title": "Pork Schnitzel",
+    "description": "Savory pork schnitzel.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "pork",
+      "german",
+      "fried"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-101",
+    "title": "Sweet and Sour Pork",
+    "description": "Savory sweet and sour pork.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "pork",
+      "asian",
+      "stir_fry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-102",
+    "title": "Pork Carnitas",
+    "description": "Savory pork carnitas.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 240,
+    "tags": [
+      "dinner",
+      "pork",
+      "mexican",
+      "slow_cooker"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-103",
+    "title": "Tonkatsu",
+    "description": "Savory tonkatsu.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "pork",
+      "japanese",
+      "fried"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-104",
+    "title": "Pork Ramen",
+    "description": "Savory pork ramen.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "pork",
+      "japanese",
+      "noodles"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-105",
+    "title": "BBQ Ribs",
+    "description": "Savory bbq ribs.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 180,
+    "tags": [
+      "dinner",
+      "pork",
+      "bbq",
+      "grill"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-106",
+    "title": "Pork Stir-Fry",
+    "description": "Savory pork stir-fry.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "pork",
+      "asian",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-107",
+    "title": "Pork Chop Suey",
+    "description": "Savory pork chop suey.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "pork",
+      "asian",
+      "stir_fry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-108",
+    "title": "Pork Medallions",
+    "description": "Savory pork medallions.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "pork",
+      "elegant",
+      "stovetop"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-109",
+    "title": "Pork Tacos",
+    "description": "Savory pork tacos.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "pork",
+      "mexican",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-110",
+    "title": "Pork Vindaloo",
+    "description": "Savory pork vindaloo.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "pork",
+      "indian",
+      "spicy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-111",
+    "title": "Pork Adobo",
+    "description": "Savory pork adobo.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 35,
+    "tags": [
+      "dinner",
+      "pork",
+      "filipino",
+      "stovetop"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-112",
+    "title": "Pork Cutlets",
+    "description": "Savory pork cutlets.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "pork",
+      "breaded",
+      "fried"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-113",
+    "title": "Pork Stew",
+    "description": "Savory pork stew.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 90,
+    "tags": [
+      "dinner",
+      "pork",
+      "comfort",
+      "stovetop"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-114",
+    "title": "Pork Gyoza",
+    "description": "Savory pork gyoza.",
+    "prep_time_minutes": 30,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "pork",
+      "japanese",
+      "pan_fried"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-115",
+    "title": "Pork Souvlaki",
+    "description": "Savory pork souvlaki.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "pork",
+      "greek",
+      "grill"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook properly.",
+      "Serve warm."
+    ]
+  },
+  {
+    "id": "stock-116",
+    "title": "Eggplant Parmesan",
+    "description": "Delicious eggplant parmesan.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 35,
+    "tags": [
+      "dinner",
+      "vegetarian",
+      "italian",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-117",
+    "title": "Veggie Lasagna",
+    "description": "Delicious veggie lasagna.",
+    "prep_time_minutes": 30,
+    "cook_time_minutes": 45,
+    "tags": [
+      "dinner",
+      "vegetarian",
+      "italian",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-118",
+    "title": "Ratatouille",
+    "description": "Delicious ratatouille.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 40,
+    "tags": [
+      "dinner",
+      "vegan",
+      "french",
+      "stovetop"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-119",
+    "title": "Vegetable Curry",
+    "description": "Delicious vegetable curry.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "vegan",
+      "indian",
+      "curry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-120",
+    "title": "Falafel Plate",
+    "description": "Delicious falafel plate.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "vegan",
+      "middle_eastern"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-121",
+    "title": "Veggie Pad Thai",
+    "description": "Delicious veggie pad thai.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "vegetarian",
+      "thai",
+      "noodles"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-122",
+    "title": "Mushroom Stroganoff",
+    "description": "Delicious mushroom stroganoff.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "vegetarian",
+      "russian",
+      "pasta"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-123",
+    "title": "Cauliflower Steak",
+    "description": "Delicious cauliflower steak.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "vegan",
+      "healthy",
+      "roast"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-124",
+    "title": "Portobello Burger",
+    "description": "Delicious portobello burger.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "vegetarian",
+      "burger",
+      "grill"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-125",
+    "title": "Veggie Enchiladas",
+    "description": "Delicious veggie enchiladas.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "vegetarian",
+      "mexican",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-126",
+    "title": "Tofu Stir-Fry",
+    "description": "Delicious tofu stir-fry.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "vegan",
+      "asian",
+      "stir_fry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-127",
+    "title": "Lentil Curry",
+    "description": "Delicious lentil curry.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "vegan",
+      "indian",
+      "curry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-128",
+    "title": "Veggie Sushi Rolls",
+    "description": "Delicious veggie sushi rolls.",
+    "prep_time_minutes": 30,
+    "cook_time_minutes": 0,
+    "tags": [
+      "dinner",
+      "vegan",
+      "japanese",
+      "no_cook"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-129",
+    "title": "Stuffed Portobello",
+    "description": "Delicious stuffed portobello.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "vegetarian",
+      "bake",
+      "elegant"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-130",
+    "title": "Vegetable Paella",
+    "description": "Delicious vegetable paella.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "vegan",
+      "spanish",
+      "rice"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-131",
+    "title": "Veggie Moussaka",
+    "description": "Delicious veggie moussaka.",
+    "prep_time_minutes": 30,
+    "cook_time_minutes": 60,
+    "tags": [
+      "dinner",
+      "vegetarian",
+      "greek",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-132",
+    "title": "Tempeh Tacos",
+    "description": "Delicious tempeh tacos.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "vegan",
+      "mexican",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-133",
+    "title": "Veggie Bibimbap",
+    "description": "Delicious veggie bibimbap.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "vegetarian",
+      "korean",
+      "bowl"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-134",
+    "title": "Cauliflower Wings",
+    "description": "Delicious cauliflower wings.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "vegan",
+      "american",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-135",
+    "title": "Veggie Pot Pie",
+    "description": "Delicious veggie pot pie.",
+    "prep_time_minutes": 25,
+    "cook_time_minutes": 35,
+    "tags": [
+      "dinner",
+      "vegetarian",
+      "comfort",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-136",
+    "title": "Black Bean Burger",
+    "description": "Delicious black bean burger.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "vegan",
+      "burger",
+      "healthy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-137",
+    "title": "Veggie Pho",
+    "description": "Delicious veggie pho.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "vegan",
+      "vietnamese",
+      "soup"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-138",
+    "title": "Mushroom Bourguignon",
+    "description": "Delicious mushroom bourguignon.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 45,
+    "tags": [
+      "dinner",
+      "vegan",
+      "french",
+      "stew"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-139",
+    "title": "Veggie Shepherd's Pie",
+    "description": "Delicious veggie shepherd's pie.",
+    "prep_time_minutes": 25,
+    "cook_time_minutes": 35,
+    "tags": [
+      "dinner",
+      "vegan",
+      "comfort",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-140",
+    "title": "Tofu Katsu",
+    "description": "Delicious tofu katsu.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "vegan",
+      "japanese",
+      "fried"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as directed.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-141",
+    "title": "Cauliflower Rice Bowl",
+    "description": "Healthy cauliflower rice bowl.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "healthy",
+      "bowl"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-142",
+    "title": "Zucchini Lasagna",
+    "description": "Healthy zucchini lasagna.",
+    "prep_time_minutes": 25,
+    "cook_time_minutes": 40,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "italian",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-143",
+    "title": "Lettuce Wrap Tacos",
+    "description": "Healthy lettuce wrap tacos.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "mexican",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-144",
+    "title": "Spaghetti Squash Marinara",
+    "description": "Healthy spaghetti squash marinara.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 45,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "italian",
+      "vegetarian"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-145",
+    "title": "Cauliflower Pizza",
+    "description": "Healthy cauliflower pizza.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "italian",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-146",
+    "title": "Egg Roll in a Bowl",
+    "description": "Healthy egg roll in a bowl.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "asian",
+      "stir_fry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-147",
+    "title": "Cabbage Rolls",
+    "description": "Healthy cabbage rolls.",
+    "prep_time_minutes": 25,
+    "cook_time_minutes": 60,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "comfort",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-148",
+    "title": "Stuffed Zucchini Boats",
+    "description": "Healthy stuffed zucchini boats.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "bake",
+      "healthy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-149",
+    "title": "Cauliflower Mac and Cheese",
+    "description": "Healthy cauliflower mac and cheese.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "comfort",
+      "vegetarian"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-150",
+    "title": "Keto Meatballs",
+    "description": "Healthy keto meatballs.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "protein",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-151",
+    "title": "Shirataki Noodle Stir-Fry",
+    "description": "Healthy shirataki noodle stir-fry.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 10,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "asian",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-152",
+    "title": "Bunless Burger Bowl",
+    "description": "Healthy bunless burger bowl.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "beef",
+      "bowl"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-153",
+    "title": "Chicken Zoodle Soup",
+    "description": "Healthy chicken zoodle soup.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "soup",
+      "healthy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-154",
+    "title": "Eggplant Pizza",
+    "description": "Healthy eggplant pizza.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 25,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "italian",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-155",
+    "title": "Portobello Mushroom Caps",
+    "description": "Healthy portobello mushroom caps.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "vegetarian",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-156",
+    "title": "Taco Stuffed Peppers",
+    "description": "Healthy taco stuffed peppers.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 30,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "mexican",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-157",
+    "title": "Cauliflower Fried Rice",
+    "description": "Healthy cauliflower fried rice.",
+    "prep_time_minutes": 12,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "asian",
+      "stir_fry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-158",
+    "title": "Zucchini Fritters",
+    "description": "Healthy zucchini fritters.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "vegetarian",
+      "pan_fried"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-159",
+    "title": "Cucumber Sushi",
+    "description": "Healthy cucumber sushi.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 0,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "japanese",
+      "no_cook"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-160",
+    "title": "Lettuce Wrap Burgers",
+    "description": "Healthy lettuce wrap burgers.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "low_carb",
+      "beef",
+      "grill"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare ingredients.",
+      "Cook as needed.",
+      "Serve fresh."
+    ]
+  },
+  {
+    "id": "stock-161",
+    "title": "15-Minute Pasta",
+    "description": "Fast 15-minute pasta.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 10,
+    "tags": [
+      "dinner",
+      "quick",
+      "vegetarian",
+      "pasta"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-162",
+    "title": "Quick Fried Rice",
+    "description": "Fast quick fried rice.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 10,
+    "tags": [
+      "dinner",
+      "quick",
+      "asian",
+      "stir_fry"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-163",
+    "title": "Instant Pot Chili",
+    "description": "Fast instant pot chili.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "quick",
+      "beef",
+      "pressure_cooker"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-164",
+    "title": "Sheet Pan Sausage",
+    "description": "Fast sheet pan sausage.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 20,
+    "tags": [
+      "dinner",
+      "quick",
+      "one_pan",
+      "easy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-165",
+    "title": "Quick Chicken Teriyaki",
+    "description": "Fast quick chicken teriyaki.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "quick",
+      "chicken",
+      "asian"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-166",
+    "title": "Microwave Mug Meal",
+    "description": "Fast microwave mug meal.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 5,
+    "tags": [
+      "dinner",
+      "quick",
+      "single_serve",
+      "microwave"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-167",
+    "title": "Quick Tuna Melt",
+    "description": "Fast quick tuna melt.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 8,
+    "tags": [
+      "dinner",
+      "quick",
+      "seafood",
+      "sandwich"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-168",
+    "title": "Instant Ramen Upgrade",
+    "description": "Fast instant ramen upgrade.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 5,
+    "tags": [
+      "dinner",
+      "quick",
+      "asian",
+      "budget"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-169",
+    "title": "Quick Shakshuka",
+    "description": "Fast quick shakshuka.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "quick",
+      "vegetarian",
+      "eggs"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-170",
+    "title": "Speed Stir-Fry",
+    "description": "Fast speed stir-fry.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 8,
+    "tags": [
+      "dinner",
+      "quick",
+      "asian",
+      "vegetarian"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-171",
+    "title": "Quick Flatbread Pizza",
+    "description": "Fast quick flatbread pizza.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 10,
+    "tags": [
+      "dinner",
+      "quick",
+      "italian",
+      "easy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-172",
+    "title": "Fast Fajita Bowl",
+    "description": "Fast fast fajita bowl.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 12,
+    "tags": [
+      "dinner",
+      "quick",
+      "mexican",
+      "bowl"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-173",
+    "title": "Quick Quesadilla",
+    "description": "Fast quick quesadilla.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 8,
+    "tags": [
+      "dinner",
+      "quick",
+      "mexican",
+      "cheese"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-174",
+    "title": "Speedy Soup",
+    "description": "Fast speedy soup.",
+    "prep_time_minutes": 8,
+    "cook_time_minutes": 15,
+    "tags": [
+      "dinner",
+      "quick",
+      "soup",
+      "easy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-175",
+    "title": "Quick Salmon",
+    "description": "Fast quick salmon.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 10,
+    "tags": [
+      "dinner",
+      "quick",
+      "seafood",
+      "healthy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare quickly.",
+      "Cook fast.",
+      "Serve immediately."
+    ]
+  },
+  {
+    "id": "stock-176",
+    "title": "Hummus and Veggies",
+    "description": "Tasty hummus and veggies.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 0,
+    "tags": [
+      "snack",
+      "vegan",
+      "healthy",
+      "no_cook"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-177",
+    "title": "Cheese and Crackers",
+    "description": "Tasty cheese and crackers.",
+    "prep_time_minutes": 3,
+    "cook_time_minutes": 0,
+    "tags": [
+      "snack",
+      "vegetarian",
+      "no_cook",
+      "easy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-178",
+    "title": "Trail Mix",
+    "description": "Tasty trail mix.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 0,
+    "tags": [
+      "snack",
+      "vegan",
+      "no_cook",
+      "portable"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-179",
+    "title": "Energy Balls",
+    "description": "Tasty energy balls.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 0,
+    "tags": [
+      "snack",
+      "vegan",
+      "meal_prep",
+      "no_cook"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-180",
+    "title": "Deviled Eggs",
+    "description": "Tasty deviled eggs.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 10,
+    "tags": [
+      "snack",
+      "protein",
+      "no_cook",
+      "meal_prep"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-181",
+    "title": "Caprese Skewers",
+    "description": "Tasty caprese skewers.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 0,
+    "tags": [
+      "snack",
+      "vegetarian",
+      "no_cook",
+      "fresh"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-182",
+    "title": "Stuffed Dates",
+    "description": "Tasty stuffed dates.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 0,
+    "tags": [
+      "snack",
+      "vegetarian",
+      "no_cook",
+      "sweet"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-183",
+    "title": "Rice Cakes with Toppings",
+    "description": "Tasty rice cakes with toppings.",
+    "prep_time_minutes": 3,
+    "cook_time_minutes": 0,
+    "tags": [
+      "snack",
+      "vegetarian",
+      "no_cook",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-184",
+    "title": "Apple with Nut Butter",
+    "description": "Tasty apple with nut butter.",
+    "prep_time_minutes": 2,
+    "cook_time_minutes": 0,
+    "tags": [
+      "snack",
+      "vegan",
+      "no_cook",
+      "healthy"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-185",
+    "title": "Popcorn",
+    "description": "Tasty popcorn.",
+    "prep_time_minutes": 2,
+    "cook_time_minutes": 5,
+    "tags": [
+      "snack",
+      "vegan",
+      "quick",
+      "budget"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-186",
+    "title": "Edamame",
+    "description": "Tasty edamame.",
+    "prep_time_minutes": 2,
+    "cook_time_minutes": 5,
+    "tags": [
+      "snack",
+      "vegan",
+      "protein",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-187",
+    "title": "Bruschetta",
+    "description": "Tasty bruschetta.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 5,
+    "tags": [
+      "snack",
+      "vegetarian",
+      "italian",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-188",
+    "title": "Spring Rolls",
+    "description": "Tasty spring rolls.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 0,
+    "tags": [
+      "snack",
+      "vegan",
+      "asian",
+      "no_cook"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-189",
+    "title": "Nachos",
+    "description": "Tasty nachos.",
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 10,
+    "tags": [
+      "snack",
+      "vegetarian",
+      "cheese",
+      "quick"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  },
+  {
+    "id": "stock-190",
+    "title": "Spinach Dip",
+    "description": "Tasty spinach dip.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 20,
+    "tags": [
+      "snack",
+      "vegetarian",
+      "dip",
+      "bake"
+    ],
+    "ingredients": [
+      "Ingredient 1",
+      "Ingredient 2",
+      "Ingredient 3"
+    ],
+    "steps": [
+      "Prepare.",
+      "Serve."
+    ]
+  }
+]

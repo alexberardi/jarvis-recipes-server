@@ -1,0 +1,6 @@
+{
+  "jsonld_blocks": [
+    "{ \"@context\": \"http://schema.org\", \"@type\": \"Recipe\", \"name\": \"Test JSONLD Pasta\", \"recipeIngredient\": [\"1 cup pasta\", \"2 tbsp oil\"], \"recipeInstructions\": [\"Boil pasta\", \"Drain\", \"Serve\"] }"
+  ]
+}
+

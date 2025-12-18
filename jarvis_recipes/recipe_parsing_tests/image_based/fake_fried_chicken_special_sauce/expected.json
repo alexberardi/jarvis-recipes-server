@@ -1,0 +1,20 @@
+{
+  "title_substrings": ["fried chicken", "special sauce"],
+  "ingredients": [
+    "chicken thighs",
+    "buttermilk",
+    "flour",
+    "spices",
+    "oil",
+    "sauce",
+    "pickle"
+  ],
+  "steps": [
+    "marinate chicken",
+    "dredge in flour",
+    "fry chicken",
+    "make sauce",
+    "serve with sauce"
+  ]
+}
+

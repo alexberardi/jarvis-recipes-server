@@ -1,0 +1,61 @@
+version: "3.9"
+
+# Example docker-compose for using published GHCR images
+# Usage:
+#   Dev:  docker-compose -f docker-compose.ghcr.yml up
+#   Prod: IMAGE_TAG=latest docker-compose -f docker-compose.ghcr.yml up
+
+services:
+  recipes-api:
+    image: ghcr.io/${GITHUB_REPO:-your-username/jarvis-recipes-server}:${IMAGE_TAG:-dev}
+    command: bash -c "alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 8001"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
+      AUTH_ALGORITHM: ${AUTH_ALGORITHM}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      JARVIS_FULL_MODEL_NAME: ${JARVIS_FULL_MODEL_NAME:-full}
+      JARVIS_VISION_MODEL_NAME: ${JARVIS_VISION_MODEL_NAME:-vision}
+      LLM_APP_ID: ${LLM_APP_ID}
+      LLM_APP_KEY: ${LLM_APP_KEY}
+      LLM_RECIPE_QUEUE_MAX_RETRIES: ${LLM_RECIPE_QUEUE_MAX_RETRIES:-3}
+      RECIPE_PARSE_JOB_ABANDON_MINUTES: ${RECIPE_PARSE_JOB_ABANDON_MINUTES:-4320}
+      RECIPE_OCR_TIER2_ENABLED: ${RECIPE_OCR_TIER2_ENABLED:-true}
+    volumes:
+      - ./media:/app/media
+      - ./tests:/app/tests
+      - ./jarvis_recipes/recipe_parsing_tests:/app/jarvis_recipes/recipe_parsing_tests
+    ports:
+      - "8001:8001"
+
+  parse-worker:
+    image: ghcr.io/${GITHUB_REPO:-your-username/jarvis-recipes-server}:${IMAGE_TAG:-dev}
+    command: bash -c "alembic upgrade head && python scripts/run_parse_worker.py"
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+        reservations:
+          memory: 8g
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
+      AUTH_ALGORITHM: ${AUTH_ALGORITHM}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      JARVIS_FULL_MODEL_NAME: ${JARVIS_FULL_MODEL_NAME:-full}
+      JARVIS_VISION_MODEL_NAME: ${JARVIS_VISION_MODEL_NAME:-vision}
+      LLM_APP_ID: ${LLM_APP_ID}
+      LLM_APP_KEY: ${LLM_APP_KEY}
+      LLM_RECIPE_QUEUE_MAX_RETRIES: ${LLM_RECIPE_QUEUE_MAX_RETRIES:-3}
+      RECIPE_PARSE_JOB_ABANDON_MINUTES: ${RECIPE_PARSE_JOB_ABANDON_MINUTES:-4320}
+      RECIPE_OCR_TIER2_ENABLED: ${RECIPE_OCR_TIER2_ENABLED:-true}
+    volumes:
+      - easyocr-cache:/root/.EasyOCR
+      - ./tests:/app/tests
+      - ./jarvis_recipes/recipe_parsing_tests:/app/jarvis_recipes/recipe_parsing_tests
+    depends_on:
+      - recipes-api
+
+volumes:
+  easyocr-cache:
+
