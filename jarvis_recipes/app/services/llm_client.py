@@ -492,7 +492,7 @@ async def call_meal_plan_select(
         warnings = result.get("warnings", [])
         
         # Validate all recipe IDs are in candidates
-            candidate_ids = {c.get("id") for c in candidates}
+        candidate_ids = {c.get("id") for c in candidates}
         validated_ranked = []
         
         for idx, ranked in enumerate(ranked_recipes[:3]):  # Max 3
