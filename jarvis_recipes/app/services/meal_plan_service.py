@@ -65,25 +65,25 @@ def search_recipes(
         )
 
     # Core (stock) recipes - always include
-    base_path = Path(__file__).resolve().parents[3] / "static_data"
-    stock = static_recipe_service.list_stock_recipes(base_path, None, limit=limit)
-    for s in stock:
-        if s.get("id") in exclude_recipe_ids:
-            continue
-        tags = s.get("tags") or []
-        if tags_any and not set(tags_any).intersection(tags):
-            continue
-        results.append(
-            {
-                "id": s.get("id"),
-                "source": "core",
-                "title": s.get("title"),
-                "description": s.get("description"),
-                "tags": tags,
-                "prep_time_minutes": s.get("prep_time_minutes") or 0,
-                "cook_time_minutes": s.get("cook_time_minutes") or 0,
-            }
-        )
+        base_path = Path(__file__).resolve().parents[3] / "static_data"
+        stock = static_recipe_service.list_stock_recipes(base_path, None, limit=limit)
+        for s in stock:
+            if s.get("id") in exclude_recipe_ids:
+                continue
+            tags = s.get("tags") or []
+            if tags_any and not set(tags_any).intersection(tags):
+                continue
+            results.append(
+                {
+                    "id": s.get("id"),
+                    "source": "core",
+                    "title": s.get("title"),
+                    "description": s.get("description"),
+                    "tags": tags,
+                    "prep_time_minutes": s.get("prep_time_minutes") or 0,
+                    "cook_time_minutes": s.get("cook_time_minutes") or 0,
+                }
+            )
 
     return results[:limit]
 

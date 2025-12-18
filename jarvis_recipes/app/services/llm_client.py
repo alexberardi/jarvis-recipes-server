@@ -492,7 +492,7 @@ async def call_meal_plan_select(
         warnings = result.get("warnings", [])
         
         # Validate all recipe IDs are in candidates
-        candidate_ids = {c.get("id") for c in candidates}
+            candidate_ids = {c.get("id") for c in candidates}
         validated_ranked = []
         
         for idx, ranked in enumerate(ranked_recipes[:3]):  # Max 3
@@ -515,13 +515,13 @@ async def call_meal_plan_select(
         
         # If no valid ranked recipes, return null selection
         if not validated_ranked:
-            return {
-                "selected_recipe_id": None,
-                "confidence": 0.0,
+                return {
+                    "selected_recipe_id": None,
+                    "confidence": 0.0,
                 "reason": "No valid recipes returned by LLM",
                 "warnings": warnings + ["LLM returned no valid selections"],
                 "alternatives": [],
-            }
+                }
         
         # Primary selection is the first ranked recipe
         primary = validated_ranked[0]

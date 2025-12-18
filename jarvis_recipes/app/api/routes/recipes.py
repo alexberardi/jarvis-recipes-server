@@ -73,7 +73,7 @@ def get_user_recipe(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    recipe = recipes_service.get_recipe(db, recipe_id)
+    recipe = recipes_service.get_recipe(db, current_user.id, recipe_id)
     if not recipe or recipe.user_id != str(current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipe not found")
     return recipe
