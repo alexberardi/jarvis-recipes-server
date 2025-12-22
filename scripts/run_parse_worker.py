@@ -62,7 +62,18 @@ def process_one(db: Session) -> bool:
                 parse_job_service.mark_complete(db, job, result)
                 logger.info("Job %s complete", job.id)
             else:
-                should_retry = job.attempts < max_retries and (result.error_code in {"llm_timeout", "llm_failed", "fetch_failed"})
+                # Don't retry encoding errors - they won't fix themselves
+                # Also don't retry if next_action is set (client should handle it)
+                is_encoding_error = (
+                    result.error_code == "fetch_failed" 
+                    and ("encoding_error" in (result.warnings or []) or result.next_action == "webview_extract")
+                )
+                should_retry = (
+                    not is_encoding_error 
+                    and result.next_action is None
+                    and job.attempts < max_retries 
+                    and (result.error_code in {"llm_timeout", "llm_failed", "fetch_failed"})
+                )
                 if should_retry:
                     logger.warning("Job %s failed with %s; retrying (attempt %s/%s)", job.id, result.error_code, job.attempts, max_retries)
                     job.status = parse_job_service.RecipeParseJobStatus.PENDING.value
@@ -71,8 +82,19 @@ def process_one(db: Session) -> bool:
                     db.commit()
                     db.refresh(job)
                 else:
-                    parse_job_service.mark_error(db, job, result.error_code or "parse_failed", result.error_message or "Parse failed")
-                    logger.warning("Job %s failed: %s", job.id, result.error_message)
+                    # If result has next_action, store the full result so client can see the suggestion
+                    if result.next_action:
+                        # Store result_json with next_action even though it failed
+                        parse_job_service.mark_complete(db, job, result)
+                        # Override status to ERROR but keep result_json
+                        job.status = parse_job_service.RecipeParseJobStatus.ERROR.value
+                        job.error_code = result.error_code or "parse_failed"
+                        job.error_message = result.error_message or "Parse failed"
+                        db.commit()
+                        logger.warning("Job %s failed but stored next_action=%s: %s", job.id, result.next_action, result.error_message)
+                    else:
+                        parse_job_service.mark_error(db, job, result.error_code or "parse_failed", result.error_message or "Parse failed")
+                        logger.warning("Job %s failed: %s", job.id, result.error_message)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Job %s crashed", job.id)
             parse_job_service.mark_error(db, job, "worker_error", str(exc))

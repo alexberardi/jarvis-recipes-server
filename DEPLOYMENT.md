@@ -5,7 +5,7 @@
 ### Prerequisites
 - Docker 20.10+ and Docker Compose installed
 - Access to GitHub Container Registry (or make package public)
-- Server with at least 16GB RAM (for parse-worker with EasyOCR)
+- Server with at least 8GB RAM (for parse-worker)
 
 ---
 
@@ -44,8 +44,8 @@ AUTH_SECRET_KEY=$(openssl rand -hex 32)
 
 # LLM Proxy
 LLM_BASE_URL=http://your-llm-proxy:8000
-LLM_APP_ID=your-app-id
-LLM_APP_KEY=your-app-key
+JARVIS_AUTH_APP_ID=your-app-id
+JARVIS_AUTH_APP_KEY=your-app-key
 ```
 
 ### 3. Login to GitHub Container Registry
@@ -212,13 +212,10 @@ docker-compose -f docker-compose.staging.yml exec recipes-api bash
 docker-compose -f docker-compose.staging.yml exec parse-worker bash
 ```
 
-### Clear EasyOCR Cache (if OOM issues)
+### OCR Service
 
-```bash
-docker-compose -f docker-compose.staging.yml down
-docker volume rm jarvis-recipes-server_easyocr-cache
-docker-compose -f docker-compose.staging.yml up -d
-```
+OCR processing is now handled by the separate `jarvis-ocr-service` microservice.
+Ensure `JARVIS_OCR_SERVICE_URL` is configured in your environment.
 
 ---
 
@@ -353,8 +350,8 @@ docker-compose -f docker-compose.staging.yml up -d --scale parse-worker=3
 | `POSTGRES_PASSWORD` | Yes | - | Database password |
 | `AUTH_SECRET_KEY` | Yes | - | JWT signing key |
 | `LLM_BASE_URL` | Yes | - | LLM proxy URL |
-| `LLM_APP_ID` | Yes | - | LLM app ID |
-| `LLM_APP_KEY` | Yes | - | LLM app key |
+| `JARVIS_AUTH_APP_ID` | Yes | - | Jarvis authentication app ID (for LLM proxy and OCR service) |
+| `JARVIS_AUTH_APP_KEY` | Yes | - | Jarvis authentication app key (for LLM proxy and OCR service) |
 | `APP_PORT` | No | `8001` | Internal container port |
 | `HOST_PORT` | No | `8001` | External port exposed to host |
 | `POSTGRES_DB` | No | `jarvis_recipes` | Database name |

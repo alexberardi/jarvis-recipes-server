@@ -221,24 +221,42 @@ async def enqueue_parse_recipe(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
+    """
+    Enqueue a recipe parsing job from URL.
+    
+    Note: This endpoint now always requires client-side webview extraction.
+    The client should extract JSON-LD and/or HTML from a webview and submit
+    to /recipes/parse-payload/async instead.
+    
+    This endpoint performs basic URL validation and returns next_action="webview_extract"
+    to guide the client to use the webview pattern.
+    """
     job_id = str(uuid.uuid4())
     preflight = await preflight_validate_url(str(payload.url))
     if not preflight.ok:
+        detail = {
+            "error_code": preflight.error_code or "preflight_failed",
+            "message": preflight.error_message,
+            "status_code": preflight.status_code,
+            "job_id": job_id,
+        }
+        # Include next_action if preflight detected encoding/blocking issues
+        if preflight.next_action:
+            detail["next_action"] = preflight.next_action
+            detail["next_action_reason"] = preflight.next_action_reason
         raise HTTPException(
             status_code=400,
-            detail={
-                "error_code": preflight.error_code or "preflight_failed",
-                "message": preflight.error_message,
-                "status_code": preflight.status_code,
-                "job_id": job_id,
-            },
+            detail=detail,
         )
-    job = parse_job_service.create_ingestion_job(
-        db,
-        str(current_user.id),
-        {"source_type": "server_fetch", "source_url": str(payload.url)},
+    
+    # Always require webview extraction - skip server-side fetch
+    # This avoids encoding issues and works better with modern websites
+    return ParseJobStatus(
+        id=job_id,
+        status="PENDING",
+        next_action="webview_extract",
+        next_action_reason="webview_required",
     )
-    return ParseJobStatus(id=job.id, status=job.status)
 
 
 @router.get("/parse-url/status/{job_id}", response_model=ParseJobStatus)
@@ -341,14 +359,27 @@ def cancel_parse_job(
     job = parse_job_service.get_job_for_user(db, job_id, current_user.id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    
+    # Allow canceling COMPLETE jobs - just mark as CANCELED
+    if job.status == parse_job_service.RecipeParseJobStatus.COMPLETE.value:
+        parse_job_service.mark_canceled(db, job)
+        return ParseJobStatus(
+            id=job.id,
+            status=job.status,
+            result=None,
+            error_code=None,
+            error_message=None,
+        )
+    
+    # For other terminal states, don't allow canceling
     if job.status in {
         parse_job_service.RecipeParseJobStatus.ERROR.value,
-        parse_job_service.RecipeParseJobStatus.COMPLETE.value,
         parse_job_service.RecipeParseJobStatus.COMMITTED.value,
         parse_job_service.RecipeParseJobStatus.ABANDONED.value,
         parse_job_service.RecipeParseJobStatus.CANCELED.value,
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Job cannot be canceled")
+    
     ok = parse_job_service.mark_canceled(db, job)
     if not ok:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Job cannot be canceled")

@@ -42,22 +42,23 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+test-results/
 
 # Translations
 *.mo
 *.pot
 
-# Django stuff:
+# Django stuff
 *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
-# Flask stuff:
+# Flask stuff
 instance/
 .webassets-cache
 
-# Scrapy stuff:
+# Scrapy stuff
 .scrapy
 
 # Sphinx documentation
@@ -69,6 +70,7 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.ipynb
 
 # IPython
 profile_default/
@@ -80,8 +82,8 @@ ipython_config.py
 # pipenv
 Pipfile.lock
 
-# poetry
-poetry.lock
+# poetry (keep poetry.lock for reproducible builds)
+# poetry.lock
 
 # PEP 582
 __pypackages__/
@@ -102,6 +104,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+!env.*.template
+!.env.example
 
 # Spyder project settings
 .spyderproject
@@ -133,12 +137,17 @@ cython_debug/
 *.swp
 *.swo
 *.swn
-*~
-.DS_Store
+*.iml
+*.sublime-project
+*.sublime-workspace
 
 # Docker
-*.log
 docker-compose.override.yml
+docker-data/
+postgres-data/
+redis-data/
+*.volume
+volumes/
 
 # Database
 *.db
@@ -153,22 +162,37 @@ media/*
 # Keep migrations in git, but ignore any temp files
 alembic/versions/__pycache__/
 
-# Test outputs
-pytest_output.log
-.coverage
-htmlcov/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Temporary files
-*.tmp
-*.temp
-*.bak
-*.swp
-*~
-
 # EasyOCR cache (if running locally)
 .EasyOCR/
 
+# S3 local storage (if using localstack or similar)
+.s3-local/
+s3-local/
+
+# Logs directory
+logs/
+*.log.*
+
+# Temporary processing directories
+tmp/
+temp/
+/tmp/
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.directory
+
+# Backup and swap files
+*.bak
+*.backup
+*.orig
+*~

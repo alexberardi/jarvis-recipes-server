@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from jarvis_recipes.app.db import models
-from jarvis_recipes.app.services import url_recipe_parser
+from jarvis_recipes.app.services import queue_service, url_recipe_parser
 
 
 def _split_qty_unit(qty: str) -> Tuple[str | None, str | None]:
@@ -114,6 +114,22 @@ def create_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+    
+    # Enqueue to Redis queue (skip for image jobs - they go directly to OCR queue)
+    if job_type != "image":
+        try:
+            queue_data = {
+                "url": url,
+                "use_llm_fallback": use_llm_fallback,
+                **(job_data or {}),
+            }
+            queue_service.enqueue_job(job_type, job.id, queue_data)
+        except Exception as exc:
+            # Log error but don't fail job creation - job is in DB and can be processed later
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to enqueue job %s to Redis: %s", job.id, exc)
+    
     return job
 
 
@@ -146,7 +162,13 @@ def fetch_next_pending(db: Session, job_type: str = "url") -> Optional[models.Re
     return db.scalars(stmt).first()
 
 
+def is_canceled(job: models.RecipeParseJob) -> bool:
+    """Check if a job has been canceled."""
+    return job.status == RecipeParseJobStatus.CANCELED.value
+
+
 def mark_running(db: Session, job: models.RecipeParseJob) -> None:
+    """Mark a job as running, but only if it's not in a terminal state."""
     if job.status in {s.value for s in (RecipeParseJobStatus.CANCELED, RecipeParseJobStatus.COMMITTED, RecipeParseJobStatus.ABANDONED)}:
         return
     job.status = RecipeParseJobStatus.RUNNING.value
@@ -218,6 +240,8 @@ def mark_complete(db: Session, job: models.RecipeParseJob, result: url_recipe_pa
                 "source_url": recipe.get("source_url") if recipe else None,
                 "error_code": pipe.get("error_code") or payload.get("error_code"),
                 "error_message": pipe.get("error_message") or payload.get("error_message"),
+                "next_action": payload.get("next_action"),
+                "next_action_reason": payload.get("next_action_reason"),
                 "raw_pipeline": pipe if pipe else None,
             },
         }
@@ -248,7 +272,12 @@ def mark_committed(db: Session, job: models.RecipeParseJob) -> None:
 
 
 def mark_canceled(db: Session, job: models.RecipeParseJob) -> bool:
-    if job.status not in {RecipeParseJobStatus.PENDING.value, RecipeParseJobStatus.RUNNING.value}:
+    """Mark a job as canceled. Allows canceling PENDING, RUNNING, and COMPLETE jobs."""
+    if job.status not in {
+        RecipeParseJobStatus.PENDING.value,
+        RecipeParseJobStatus.RUNNING.value,
+        RecipeParseJobStatus.COMPLETE.value,
+    }:
         return False
     job.status = RecipeParseJobStatus.CANCELED.value
     job.canceled_at = datetime.utcnow()

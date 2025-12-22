@@ -14,6 +14,8 @@ class ParseJobStatus(BaseModel):
     result: Optional[dict] = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
+    next_action: Optional[str] = None
+    next_action_reason: Optional[str] = None
 
     class Config:
         populate_by_name = True

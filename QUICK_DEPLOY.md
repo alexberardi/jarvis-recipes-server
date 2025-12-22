@@ -50,8 +50,8 @@ GITHUB_REPO=your-username/jarvis-recipes-server
 DATABASE_URL=postgresql://jarvis:jarvis-password@postgres:5432/jarvis_recipes
 AUTH_SECRET_KEY=$(openssl rand -hex 32)
 LLM_BASE_URL=http://your-llm-proxy:8000
-LLM_APP_ID=your-app-id
-LLM_APP_KEY=your-app-key
+JARVIS_AUTH_APP_ID=your-app-id
+JARVIS_AUTH_APP_KEY=your-app-key
 ```
 
 ### 3. Deploy
