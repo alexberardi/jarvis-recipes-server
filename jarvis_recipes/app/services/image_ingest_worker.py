@@ -5,18 +5,15 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from jarvis_recipes.app.db import models
-from jarvis_recipes.app.services import mailbox_service, parse_job_service, s3_storage
-from jarvis_recipes.app.services.image_ingest_pipeline import run_ingestion_pipeline
-from jarvis_recipes.app.services import llm_client
-from jarvis_recipes.app.core.config import get_settings
-import subprocess
-import tempfile
 import json
-import time
-import os
-import sys
 from typing import Any, Dict, List, Optional, Tuple
+
+from jarvis_recipes.app.core.config import get_settings
+from jarvis_recipes.app.db import models
 from jarvis_recipes.app.schemas.ingestion import RecipeDraft
+from jarvis_recipes.app.services import mailbox_service, parse_job_service, s3_storage
+from jarvis_recipes.app.services.image_ingest_pipeline import OCRServiceUnavailableError, run_ingestion_pipeline
+from jarvis_recipes.app.services.url_recipe_parser import ParseResult
 
 logger = logging.getLogger(__name__)
 
@@ -26,153 +23,34 @@ async def _load_images_from_s3(keys: List[str]) -> List[bytes]:
     return [await loop.run_in_executor(None, s3_storage.download_image, key) for key in keys]
 
 
-async def _run_vision_subprocess(
-    image_bytes: bytes,
-    image_index: int,
-    image_count: int,
-    current_draft: Dict[str, Any],
-    title_hint: Optional[str],
-    settings,
-) -> Tuple[Optional[dict], List[str], Dict[str, Any]]:
-    tmp_dir = tempfile.mkdtemp()
-    img_path = os.path.join(tmp_dir, f"img_{image_index}.jpg")
-    with open(img_path, "wb") as f:
-        f.write(image_bytes)
-    payload = {
-        "current_draft": current_draft,
-        "image_index": image_index,
-        "image_count": image_count,
-        "is_final_image": image_index == image_count,
-        "title_hint": title_hint,
-    }
-    cmd = [
-        sys.executable,
-        "-m",
-        "jarvis_recipes.app.services.vision_runner",
-        "--model-name",
-        settings.llm_vision_model_name,
-        "--timeout-seconds",
-        str(settings.vision_timeout_seconds),
-        "--image-path",
-        img_path,
-        "--payload-json",
-        json.dumps(payload),
-    ]
-    start = time.time()
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    duration_ms = int((time.time() - start) * 1000)
-    stderr_snippet = (proc.stderr or "")[:1000]
-    if proc.returncode != 0:
-        return None, [f"subprocess failed rc={proc.returncode} stderr={stderr_snippet}"], {"duration_ms": duration_ms, "stderr": stderr_snippet}
-    try:
-        out = json.loads(proc.stdout)
-        if "error" in out:
-            return None, [f"runner error: {out['error']}"], {"duration_ms": duration_ms, "stderr": stderr_snippet}
-        return out.get("draft"), out.get("warnings") or [], {"duration_ms": duration_ms, "stderr": stderr_snippet}
-    except Exception as exc:  # noqa: BLE001
-        return None, [f"runner parse error: {exc}"], {"duration_ms": duration_ms, "stderr": stderr_snippet}
-
-
-async def _run_vision_inline(
-    image_bytes: bytes,
-    image_index: int,
-    image_count: int,
-    current_draft: Dict[str, Any],
-    title_hint: Optional[str],
-    settings,
-) -> Tuple[Optional[dict], List[str], Dict[str, Any]]:
-    start = time.time()
-    draft, warnings = await llm_client.call_vision_single(
-        image=image_bytes,
-        model_name=settings.llm_vision_model_name,
-        current_draft=current_draft,
-        image_index=image_index,
-        image_count=image_count,
-        is_final_image=image_index == image_count,
-        title_hint=title_hint,
-        timeout_seconds=settings.vision_timeout_seconds,
-    )
-    duration_ms = int((time.time() - start) * 1000)
-    return draft.model_dump(), warnings, {"duration_ms": duration_ms, "stderr": ""}
-
-
-async def _run_sequential_vision(
-    image_bytes: List[bytes],
-    title_hint: Optional[str],
-    settings,
-) -> Tuple[Any, List[Dict[str, Any]]]:
-    attempts: List[Dict[str, Any]] = []
-    current_draft: Dict[str, Any] = {
-        "title": title_hint or "Untitled",
-        "description": None,
-        "ingredients": [],
-        "steps": [],
-        "prep_time_minutes": 0,
-        "cook_time_minutes": 0,
-        "total_time_minutes": 0,
-        "servings": None,
-        "tags": [],
-        "source": {"type": "image", "title_hint": title_hint},
-    }
-
-    for idx, img in enumerate(image_bytes, start=1):
-        retries = 0
-        max_retries = settings.vision_subprocess_max_retries
-        last_error = None
-        while retries <= max_retries:
-            if settings.vision_subprocess_enabled:
-                draft_dict, warnings, meta = await _run_vision_subprocess(
-                    image_bytes=img,
-                    image_index=idx,
-                    image_count=len(image_bytes),
-                    current_draft=current_draft,
-                    title_hint=title_hint,
-                    settings=settings,
-                )
-            else:
-                draft_dict, warnings, meta = await _run_vision_inline(
-                    image_bytes=img,
-                    image_index=idx,
-                    image_count=len(image_bytes),
-                    current_draft=current_draft,
-                    title_hint=title_hint,
-                    settings=settings,
-                )
-            status = "success"
-            if draft_dict is None:
-                status = "failed"
-                last_error = "; ".join(warnings) if warnings else "unknown"
-            attempts.append(
-                {
-                    "tier": 3,
-                    "image_index": idx,
-                    "status": status,
-                    "duration_ms": meta.get("duration_ms"),
-                    "warnings": warnings,
-                    "retry": retries,
-                    "stderr": meta.get("stderr"),
-                }
-            )
-            if draft_dict is not None:
-                current_draft = draft_dict
-                break
-            retries += 1
-        else:
-            # exceeded retries
-            raise ValueError(f"vision failed on image {idx}: {last_error}")
-
-    final_draft = RecipeDraft.model_validate(current_draft)
-    return final_draft, attempts
+# Vision processing is now handled by the OCR service via llm_proxy_vision provider
 async def _run_pipeline_and_record(
-    db: Session, ingestion: models.RecipeIngestion, image_bytes: List[bytes], tier_max: int
+    db: Session, ingestion: models.RecipeIngestion, image_bytes: List[bytes], tier_max: int, job: models.RecipeParseJob
 ) -> Tuple[bool, Optional[RecipeDraft], Dict[str, Any]]:
     settings = get_settings()
+    pipeline_json: Dict[str, Any] = {}
     try:
         draft, pipeline_json, texts = await run_ingestion_pipeline(ingestion, image_bytes, tier_max)
+    except OCRServiceUnavailableError as exc:
+        # OCR service unavailable - mark job as pending for retry
+        logger.warning("OCR service unavailable for ingestion %s: %s. Marking job for retry.", ingestion.id, exc)
+        ingestion.status = "PENDING"
+        pipeline_json = pipeline_json or {"error": str(exc), "retry_reason": "ocr_service_unavailable"}
+        ingestion.pipeline_json = pipeline_json
+        db.commit()
+        db.refresh(ingestion)
+        # Mark job as pending (attempts already incremented by mark_running)
+        job.status = "PENDING"
+        job.error_code = "ocr_service_unavailable"
+        job.error_message = str(exc)
+        db.commit()
+        db.refresh(job)
+        return False, None, pipeline_json
     except Exception as exc:  # noqa: BLE001
         logger.exception("Pipeline failed for ingestion %s: %s", ingestion.id, exc)
         ingestion.status = "FAILED"
-        ingestion.pipeline_json = {"error": str(exc)}
+        pipeline_json = {"error": str(exc)}
+        ingestion.pipeline_json = pipeline_json
         db.commit()
         db.refresh(ingestion)
         mailbox_service.publish(
@@ -181,7 +59,7 @@ async def _run_pipeline_and_record(
             "recipe_image_ingestion_failed",
             {
                 "ingestion_id": ingestion.id,
-                "error_code": "vision_failed",
+                "error_code": "pipeline_failed",
                 "message": "Failed to extract recipe from images",
             },
         )
@@ -189,38 +67,8 @@ async def _run_pipeline_and_record(
 
     attempts = pipeline_json.get("attempts", []) if isinstance(pipeline_json, dict) else []
 
-    # If no draft from OCR tiers and vision is allowed, run sequential vision
-    pipeline_json = pipeline_json or {}
-    if draft is None and tier_max >= 3 and settings.recipe_ocr_vision_enabled:
-        try:
-            draft_obj, vision_attempts = await _run_sequential_vision(
-                image_bytes=image_bytes,
-                title_hint=ingestion.title_hint,
-                settings=settings,
-            )
-            draft = draft_obj
-            attempts.extend(vision_attempts)
-            pipeline_json["attempts"] = attempts
-            pipeline_json["selected_tier"] = 3
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Vision sequential failed for ingestion %s: %s", ingestion.id, exc)
-            ingestion.status = "FAILED"
-            pipeline_json = pipeline_json or {}
-            pipeline_json["attempts"] = attempts
-            pipeline_json["error"] = str(exc)
-            db.commit()
-            db.refresh(ingestion)
-            mailbox_service.publish(
-                db,
-                ingestion.user_id,
-                "recipe_image_ingestion_failed",
-                {
-                    "ingestion_id": ingestion.id,
-                    "error_code": "vision_failed",
-                    "message": "Failed to extract recipe from images",
-                },
-            )
-            return False
+    # Note: Vision and Cloud OCR are now handled by the OCR service
+    # via llm_proxy_vision and llm_proxy_cloud providers in the "auto" selection
 
     if draft:
         pipeline_json["warnings"] = pipeline_json.get("warnings") or []
@@ -294,26 +142,76 @@ async def process_image_ingestion_job(db: Session, job: models.RecipeParseJob) -
         return
 
     tier_max = payload.get("tier_max") or ingestion.tier_max or 3
-    success, final_draft, pipeline_json = await _run_pipeline_and_record(db, ingestion, image_bytes, tier_max)
+    try:
+        success, final_draft, pipeline_json = await _run_pipeline_and_record(db, ingestion, image_bytes, tier_max, job)
+    except Exception as exc:
+        logger.exception("Exception in _run_pipeline_and_record for job %s: %s", job.id, exc)
+        pipeline_json = {"error": str(exc), "error_code": "pipeline_exception"}
+        success = False
+        final_draft = None
+    
     logger.info(
         "image ingestion job finished",
         extra={"job_id": job.id, "ingestion_id": ingestion.id, "success": success, "status": job.status},
     )
-    if success:
-        result_payload = {"recipe_draft": final_draft.model_dump() if final_draft else None, "pipeline": pipeline_json}
-        parse_job_service.mark_complete(
-            db,
-            job,
-            type(
-                "Result",
-                (),
-                {
-                    "model_dump_json": lambda self=None: json.dumps(result_payload),
-                    "error_code": None,
-                    "error_message": None,
-                },
-            )(),
-        )
+    
+    if success and final_draft:
+        try:
+            # Create a result object that mark_complete can process
+            # mark_complete calls result.model_dump_json() and expects JSON with "recipe" or "recipe_draft"
+            class ImageParseResult:
+                def model_dump_json(self):
+                    payload = {
+                        "recipe_draft": final_draft.model_dump(),
+                        "pipeline": pipeline_json,
+                    }
+                    return json.dumps(payload)
+            
+            result = ImageParseResult()
+            logger.debug("Calling mark_complete for job %s", job.id)
+            parse_job_service.mark_complete(db, job, result)
+            logger.info("Successfully marked job %s as complete", job.id)
+        except Exception as exc:
+            logger.exception("Failed to mark job %s as complete: %s", job.id, exc)
+            # Fall back to marking as error with the pipeline info
+            try:
+                job.result_json = {"pipeline": pipeline_json, "recipe_draft": final_draft.model_dump() if final_draft else None}
+                db.commit()
+                parse_job_service.mark_error(db, job, "mark_complete_failed", str(exc))
+            except Exception as exc2:
+                logger.exception("Failed to mark job %s as error after mark_complete failed: %s", job.id, exc2)
     else:
-        parse_job_service.mark_error(db, job, "ingestion_failed", "Image ingestion failed")
+        # Store pipeline_json in result_json even on failure so UI can see what happened
+        try:
+            # Extract error info from pipeline_json, with fallbacks
+            if isinstance(pipeline_json, dict):
+                error_code = pipeline_json.get("error_code") or pipeline_json.get("status") or "ingestion_failed"
+                error_message = (
+                    pipeline_json.get("error_message") 
+                    or pipeline_json.get("error")
+                    or "Image ingestion failed"
+                )
+                # Check if quality gate failed
+                attempts = pipeline_json.get("attempts", [])
+                if attempts:
+                    last_attempt = attempts[-1] if isinstance(attempts, list) else {}
+                    if isinstance(last_attempt, dict):
+                        status = last_attempt.get("status", "")
+                        if "quality" in status.lower():
+                            error_code = "quality_gate_failed"
+                            error_message = f"OCR quality insufficient: {error_message}"
+                        elif "validation" in status.lower():
+                            error_code = "validation_failed"
+                            error_message = f"Recipe validation failed: {error_message}"
+            else:
+                error_code = "ingestion_failed"
+                error_message = "Image ingestion failed"
+            
+            # Set result_json before marking error (mark_error doesn't touch result_json)
+            job.result_json = {"pipeline": pipeline_json, "recipe_draft": None}
+            db.commit()  # Commit result_json first
+            parse_job_service.mark_error(db, job, error_code, error_message)
+            logger.info("Marked job %s as error: %s - %s", job.id, error_code, error_message)
+        except Exception as exc:
+            logger.exception("Failed to mark job %s as error: %s", job.id, exc)
 

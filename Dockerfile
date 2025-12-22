@@ -11,9 +11,6 @@ RUN apt-get update \
         libxml2-dev \
         libxslt1-dev \
         libffi-dev \
-        tesseract-ocr \
-        libtesseract-dev \
-        libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy all files needed for installation
@@ -46,8 +43,6 @@ RUN echo "=== Checking installed commands ===" \
     && echo "=== Listing installed packages ===" \
     && pip list | grep -E "alembic|uvicorn|fastapi" || echo "packages not found" \
     && echo "=== Verification complete ==="
-
-ENV EASY_OCR_MODEL_PATH=/root/.EasyOCR
 
 CMD ["bash", "-c", "alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 8001"]
 

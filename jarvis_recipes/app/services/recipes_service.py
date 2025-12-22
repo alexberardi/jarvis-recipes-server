@@ -1,7 +1,7 @@
 from typing import Iterable, List, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -43,8 +43,13 @@ def _get_or_create_tag(db: Session, name: str) -> models.Tag:
     return tag
 
 
-def _replace_steps(recipe: models.Recipe, steps: Iterable) -> None:
-    recipe.steps.clear()
+def _replace_steps(recipe: models.Recipe, steps: Iterable, db: Session) -> None:
+    # Explicitly delete old steps using a delete query to avoid unique constraint violations
+    # when inserting new steps with the same step_number
+    stmt = delete(models.Step).where(models.Step.recipe_id == recipe.id)
+    db.execute(stmt)
+    db.flush()  # Ensure deletion is committed before inserting new steps
+    # Now add the new steps
     for step in steps:
         recipe.steps.append(
             models.Step(step_number=step.step_number, text=step.text),
@@ -83,7 +88,7 @@ def create_recipe(db: Session, user_id: int, data: RecipeCreate) -> models.Recip
         total_time_minutes=total_time,
     )
     _replace_ingredients(recipe, data.ingredients)
-    _replace_steps(recipe, data.steps)
+    _replace_steps(recipe, data.steps, db)
     recipe.tags = [_get_or_create_tag(db, name) for name in data.tags]
 
     db.add(recipe)
@@ -124,7 +129,7 @@ def update_recipe(db: Session, user_id: str, recipe_id: int, data: RecipeUpdate)
     if data.ingredients is not None:
         _replace_ingredients(recipe, data.ingredients)
     if data.steps is not None:
-        _replace_steps(recipe, data.steps)
+        _replace_steps(recipe, data.steps, db)
     if data.tags is not None:
         recipe.tags = [_get_or_create_tag(db, name) for name in data.tags]
 

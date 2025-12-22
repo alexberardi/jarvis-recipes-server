@@ -1,56 +1,80 @@
+"""
+S3 storage module - now uses object_store abstraction for MinIO/S3 support.
+
+This module provides backwards-compatible functions while using the new
+object_store module under the hood for unified MinIO/S3 support.
+"""
 import logging
-import mimetypes
-import uuid
 from pathlib import Path
 from typing import Optional, Tuple
 
-import boto3
-
 from jarvis_recipes.app.core.config import get_settings
+from jarvis_recipes.app.storage import object_store
 
 logger = logging.getLogger(__name__)
 
 
-def get_s3_client():
+def _get_bucket() -> str:
+    """Get bucket name, preferring S3_BUCKET over legacy RECIPE_IMAGE_S3_BUCKET."""
     settings = get_settings()
-    session_kwargs = {}
-    if settings.aws_access_key_id and settings.aws_secret_access_key:
-        session_kwargs["aws_access_key_id"] = settings.aws_access_key_id
-        session_kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
-    if settings.aws_session_token:
-        session_kwargs["aws_session_token"] = settings.aws_session_token
-    return boto3.client("s3", region_name=settings.recipe_image_s3_region, **session_kwargs)
+    # Prefer new unified config
+    if settings.s3_bucket:
+        return settings.s3_bucket
+    # Fall back to legacy config for backwards compatibility
+    if settings.recipe_image_s3_bucket:
+        return settings.recipe_image_s3_bucket
+    raise RuntimeError("S3_BUCKET or RECIPE_IMAGE_S3_BUCKET must be configured")
 
 
 def build_s3_key(user_id: str, ingestion_id: str, index: int, filename: str) -> str:
+    """
+    Build S3 key with normalized .jpg extension per PRD.
+    
+    Per PRD s3-to-minio.md: "Normalize all uploaded images to .jpg on ingestion."
+    """
     settings = get_settings()
-    ext = Path(filename).suffix.lstrip(".") or "jpg"
-    return f"{settings.recipe_image_s3_prefix}/{user_id}/{ingestion_id}/{index}.{ext}"
+    # Always use .jpg extension per PRD (normalize format)
+    return f"{settings.recipe_image_s3_prefix}/{user_id}/{ingestion_id}/{index}.jpg"
 
 
 def upload_image(user_id: str, ingestion_id: str, index: int, file, data_override: Optional[bytes] = None) -> Tuple[str, str]:
-    settings = get_settings()
-    if not settings.recipe_image_s3_bucket:
-        raise RuntimeError("RECIPE_IMAGE_S3_BUCKET is not configured")
+    """
+    Upload image to object storage (S3 or MinIO).
+    
+    Returns:
+        Tuple of (key, uri) where key is the object key and uri is the full s3:// URI
+    """
+    bucket = _get_bucket()
     key = build_s3_key(user_id, ingestion_id, index, getattr(file, "filename", "upload.jpg"))
     data = data_override if data_override is not None else file.file.read()
-    mime, _ = mimetypes.guess_type(key)
+    
+    # Always use image/jpeg content type since we normalize to .jpg
+    content_type = "image/jpeg"
+    
     try:
-        client = get_s3_client()
-        client.put_object(Bucket=settings.recipe_image_s3_bucket, Key=key, Body=data, ContentType=mime or "image/jpeg")
-        return key, f"s3://{settings.recipe_image_s3_bucket}/{key}"
+        # Use object_store abstraction for unified MinIO/S3 support
+        uri = object_store.put_bytes(bucket, key, content_type, data)
+        # Return key (without bucket) and full URI
+        return key, uri
     except Exception as exc:  # noqa: BLE001
-        # Log and bubble up for 500 handling upstream
-        print(f"S3 upload failed for key={key}: {exc}")
         logger.exception("S3 upload failed for key=%s", key)
         raise
 
 
 def download_image(key: str) -> bytes:
-    settings = get_settings()
-    if not settings.recipe_image_s3_bucket:
-        raise RuntimeError("RECIPE_IMAGE_S3_BUCKET is not configured")
-    client = get_s3_client()
-    obj = client.get_object(Bucket=settings.recipe_image_s3_bucket, Key=key)
-    return obj["Body"].read()
+    """
+    Download image from object storage (S3 or MinIO).
+    
+    Args:
+        key: Object key (path within bucket)
+    
+    Returns:
+        Image bytes
+    """
+    bucket = _get_bucket()
+    try:
+        return object_store.get_bytes(bucket, key)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("S3 download failed for key=%s", key)
+        raise
 

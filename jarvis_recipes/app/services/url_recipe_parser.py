@@ -56,6 +56,8 @@ class PreflightResult(BaseModel):
     content_type: Optional[str] = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
+    next_action: Optional[str] = None
+    next_action_reason: Optional[str] = None
 
 
 def _is_private_host(host: str) -> bool:
@@ -98,6 +100,7 @@ async def preflight_validate_url(url: str, timeout: float = 3.0) -> PreflightRes
             cookies = {}
 
     async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+        resp = None
         try:
             resp = await client.head(url, headers=headers, cookies=cookies)
             if resp.status_code == 405:
@@ -123,12 +126,16 @@ async def preflight_validate_url(url: str, timeout: float = 3.0) -> PreflightRes
 
     ctype = resp.headers.get("content-type", "")
     if resp.status_code >= 400:
+        # Check if it's a blocking error that should trigger webview
+        is_blocked = resp.status_code in (401, 403)
         return PreflightResult(
             ok=False,
             status_code=resp.status_code,
             content_type=ctype,
             error_code="fetch_failed",
             error_message=f"Site returned status {resp.status_code}.",
+            next_action="webview_extract" if is_blocked else None,
+            next_action_reason="blocked_by_site" if is_blocked else None,
         )
     if "text/html" not in ctype and "application/xhtml" not in ctype and ctype:
         return PreflightResult(
@@ -138,6 +145,79 @@ async def preflight_validate_url(url: str, timeout: float = 3.0) -> PreflightRes
             error_code="unsupported_content_type",
             error_message=f"Unsupported content type: {ctype}",
         )
+
+    # For successful responses, fetch a small sample to check encoding
+    # This is still fast (we only read first ~5KB) but catches encoding issues early
+    # HEAD requests don't have content, so we need to do a GET to sample
+    if resp.status_code == 200:
+        try:
+            # Do a limited GET to sample the content (HEAD doesn't return body)
+            async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+                sample_resp = await client.get(
+                    url, 
+                    headers=headers, 
+                    cookies=cookies,
+                )
+                # Only read first 5KB to keep it fast
+                content_bytes = sample_resp.content[:5000]
+            
+            # Try to decode and validate encoding
+            encoding = None
+            if "charset=" in ctype.lower():
+                try:
+                    encoding = ctype.split("charset=")[1].split(";")[0].strip().strip('"\'')
+                except (IndexError, AttributeError):
+                    pass
+            
+            if not encoding:
+                encoding = "utf-8"
+            
+            try:
+                text_sample = content_bytes.decode(encoding)
+            except (UnicodeDecodeError, LookupError):
+                # Try UTF-8 as fallback
+                try:
+                    text_sample = content_bytes.decode("utf-8")
+                except UnicodeDecodeError:
+                    # Encoding failed - suggest webview
+                    return PreflightResult(
+                        ok=False,
+                        status_code=resp.status_code,
+                        content_type=ctype,
+                        error_code="encoding_error",
+                        error_message="Unable to decode HTML content with detected encoding",
+                        next_action="webview_extract",
+                        next_action_reason="encoding_error",
+                    )
+            
+            # Validate the decoded text looks like HTML
+            if len(text_sample) > 100:
+                has_html_tags = bool(re.search(r'<[a-z]+[^>]*>', text_sample[:2000], re.I))
+                printable_count = sum(1 for c in text_sample[:2000] if (32 <= ord(c) <= 126) or c.isspace())
+                printable_ratio = printable_count / min(len(text_sample[:2000]), 2000) if text_sample[:2000] else 0
+                control_chars = sum(1 for c in text_sample[:2000] if ord(c) < 32 and c not in '\n\r\t')
+                control_ratio = control_chars / min(len(text_sample[:2000]), 2000) if text_sample[:2000] else 0
+                
+                # If it doesn't look like valid HTML, suggest webview
+                # Use same thresholds as fetch_html validation for consistency
+                if not has_html_tags or printable_ratio < 0.6 or control_ratio > 0.1:
+                    logger.warning(
+                        "Preflight detected encoding/corruption issue for %s: has_tags=%s, printable=%.2f, control=%.2f",
+                        url, has_html_tags, printable_ratio, control_ratio
+                    )
+                    return PreflightResult(
+                        ok=False,
+                        status_code=resp.status_code,
+                        content_type=ctype,
+                        error_code="encoding_error",
+                        error_message="HTML content appears corrupted or has encoding issues",
+                        next_action="webview_extract",
+                        next_action_reason="encoding_error",
+                    )
+        except Exception as exc:
+            # If encoding check fails for any reason, log but don't fail preflight
+            # (we'll catch it during actual processing)
+            logger.warning("Preflight encoding check failed for %s: %s", url, exc)
 
     return PreflightResult(ok=True, status_code=resp.status_code, content_type=ctype)
 
@@ -279,18 +359,88 @@ def _clean_parsed_ingredients(items: List[ParsedIngredient]) -> List[ParsedIngre
     return out
 
 
-def _coerce_keywords(value) -> List[str]:
+def _coerce_keywords(value, recipe_title: Optional[str] = None) -> List[str]:
+    """
+    Extract and filter tags from keywords, removing recipe-specific tags
+    and keeping only general categories useful for filtering.
+    """
     if not value:
         return []
+    
+    # Extract all keywords
+    raw_tags = []
     if isinstance(value, str):
-        return [kw.strip() for kw in value.split(",") if kw.strip()]
-    if isinstance(value, Sequence):
-        tags = []
+        raw_tags = [kw.strip() for kw in value.split(",") if kw.strip()]
+    elif isinstance(value, Sequence):
         for item in value:
             if isinstance(item, str):
-                tags.extend([kw.strip() for kw in item.split(",") if kw.strip()])
-        return tags
-    return []
+                raw_tags.extend([kw.strip() for kw in item.split(",") if kw.strip()])
+    
+    if not raw_tags:
+        return []
+    
+    # Normalize recipe title for comparison (lowercase, remove common words)
+    title_words = set()
+    if recipe_title:
+        title_normalized = recipe_title.lower()
+        # Remove common recipe words
+        for word in ["recipe", "recipes", "how to", "how to make", "easy", "best", "homemade"]:
+            title_normalized = title_normalized.replace(word, "")
+        title_words = set(title_normalized.split())
+        # Filter out very short words
+        title_words = {w for w in title_words if len(w) > 3}
+    
+    # Filter tags: keep only general categories
+    filtered_tags = []
+    for tag in raw_tags:
+        tag_lower = tag.lower().strip()
+        
+        # Skip empty tags
+        if not tag_lower:
+            continue
+        
+        # Skip tags that are too similar to the recipe title
+        if title_words:
+            tag_words = set(tag_lower.split())
+            # If tag contains 2+ words from the title, it's probably too specific
+            overlap = len(tag_words & title_words)
+            if overlap >= 2:
+                continue
+            # Skip if tag is essentially the recipe name with minor variations
+            if tag_lower in recipe_title.lower() or recipe_title.lower() in tag_lower:
+                continue
+        
+        # Skip tags that are just recipe name variations
+        # (e.g., "turkey pot pie", "easy turkey pot pie", "turkey pot pie recipe")
+        if recipe_title and len(tag_lower.split()) >= 3:
+            # If tag has 3+ words and contains the recipe name, skip it
+            if any(word in tag_lower for word in title_words if len(word) > 4):
+                continue
+        
+        # Keep general categories (single words or common categories)
+        # Examples: "chicken", "dessert", "vegetarian", "gluten-free", "dinner", "breakfast"
+        if len(tag_lower.split()) <= 2:  # Keep 1-2 word tags (more likely to be categories)
+            filtered_tags.append(tag)
+        elif any(category in tag_lower for category in [
+            "free", "friendly", "diet", "cuisine", "course", "meal", "type",
+            "vegetarian", "vegan", "gluten", "dairy", "nut", "paleo", "keto",
+            "breakfast", "lunch", "dinner", "dessert", "appetizer", "snack",
+            "american", "italian", "mexican", "asian", "french", "indian", "chinese",
+            "quick", "slow", "cooker", "instant", "one-pot", "sheet-pan"
+        ]):
+            # Keep tags that contain common category keywords
+            filtered_tags.append(tag)
+    
+    # Deduplicate (case-insensitive)
+    seen = set()
+    unique_tags = []
+    for tag in filtered_tags:
+        tag_lower = tag.lower()
+        if tag_lower not in seen:
+            seen.add(tag_lower)
+            unique_tags.append(tag)
+    
+    return unique_tags
 
 
 def _clean_text(text: str) -> str:
@@ -433,11 +583,89 @@ def _extract_ingredients(ingredients) -> List[ParsedIngredient]:
 
     def clean_name(text: str) -> str:
         cleaned = _clean_text(text)
+        # Remove parentheses and their content (handles both normal and malformed cases)
+        # First, remove properly matched parentheses: (content)
         cleaned = paren_cleanup_re.sub(" ", cleaned)
+        # Then, remove any remaining unmatched closing parentheses
+        cleaned = re.sub(r"\s*\)\s*", " ", cleaned)
+        # Remove any remaining unmatched opening parentheses
+        cleaned = re.sub(r"\s*\(\s*", " ", cleaned)
+        # Clean up any double spaces and trim
         cleaned = _clean_text(cleaned)
+        # Remove trailing spaces/parentheses that might have been left behind
+        cleaned = cleaned.rstrip(" )")
         if cleaned.lower().startswith("recipe "):
             cleaned = cleaned[7:]
         return cleaned
+
+    def split_line(line: str) -> ParsedIngredient:
+        raw = _clean_text(line)
+        if not raw:
+            return ParsedIngredient(text=raw)
+
+        # Try qty + unit + name
+        m = quantity_unit_re.match(raw)
+        if m:
+            qd = _normalize_fraction_display(_clean_text(m.group(1)))
+            unit = _clean_text(m.group(2))
+            name = clean_name(m.group(3))
+            if _is_known_unit(unit):
+                return ParsedIngredient(text=name, quantity_display=qd, unit=unit)
+            # If the token isn't a recognized unit, fall back to qty + name
+
+        # Try qty + name (no unit)
+        m = quantity_only_re.match(raw)
+        if m:
+            qd = _normalize_fraction_display(_clean_text(m.group(1)))
+            name = clean_name(m.group(2))
+            return ParsedIngredient(text=name, quantity_display=qd, unit=None)
+
+        return ParsedIngredient(text=clean_name(raw))
+
+    if isinstance(ingredients, list):
+        logger.debug("Extracting ingredients from list of %d items", len(ingredients))
+        for idx, raw in enumerate(ingredients):
+            if isinstance(raw, str):
+                cleaned = _clean_text(raw)
+                if cleaned:
+                    ingredient = split_line(cleaned)
+                    parsed.append(ingredient)
+                    logger.debug("Ingredient %d: '%s' -> text='%s', qty='%s', unit='%s'", 
+                               idx, raw[:50], ingredient.text[:30], ingredient.quantity_display, ingredient.unit)
+                else:
+                    logger.debug("Ingredient %d: string was empty after cleaning", idx)
+            elif isinstance(raw, dict):
+                text_val = raw.get("text") or raw.get("name")
+                if text_val:
+                    quantity = _clean_text(raw.get("amount") or raw.get("quantity") or "")
+                    unit = _clean_text(raw.get("unit") or "")
+                    # If dict still has combined text, try to split; otherwise use provided fields.
+                    if not quantity and not unit:
+                        ingredient = split_line(text_val)
+                        parsed.append(ingredient)
+                    else:
+                        ingredient = ParsedIngredient(
+                            text=_clean_text(text_val),
+                            quantity_display=quantity or None,
+                            unit=unit or None,
+                        )
+                        parsed.append(ingredient)
+                    logger.debug("Ingredient %d (dict): text='%s', qty='%s', unit='%s'", 
+                               idx, ingredient.text[:30], ingredient.quantity_display, ingredient.unit)
+                else:
+                    logger.debug("Ingredient %d: dict had no text/name field", idx)
+            else:
+                logger.debug("Ingredient %d: unexpected type %s", idx, type(raw).__name__)
+    elif isinstance(ingredients, str):
+        # Single string ingredient
+        cleaned = _clean_text(ingredients)
+        if cleaned:
+            parsed.append(split_line(cleaned))
+    else:
+        logger.warning("Ingredients input is not a list or string: %s", type(ingredients).__name__)
+    
+    logger.info("Extracted %d ingredients from input", len(parsed))
+    return parsed
 
 
 def _parse_llm_json_content(raw: str) -> dict:
@@ -464,53 +692,6 @@ def _parse_llm_json_content(raw: str) -> dict:
             except json.JSONDecodeError:
                 pass
     raise ValueError("LLM response was not valid JSON")
-    def split_line(line: str) -> ParsedIngredient:
-        raw = _clean_text(line)
-        if not raw:
-            return ParsedIngredient(text=raw)
-
-        # Try qty + unit + name
-        m = quantity_unit_re.match(raw)
-        if m:
-            qd = _normalize_fraction_display(_clean_text(m.group(1)))
-            unit = _clean_text(m.group(2))
-            name = clean_name(m.group(3))
-            if _is_known_unit(unit):
-                return ParsedIngredient(text=name, quantity_display=qd, unit=unit)
-            # If the token isn't a recognized unit, fall back to qty + name
-
-        # Try qty + name (no unit)
-        m = quantity_only_re.match(raw)
-        if m:
-            qd = _normalize_fraction_display(_clean_text(m.group(1)))
-            name = clean_name(m.group(2))
-            return ParsedIngredient(text=name, quantity_display=qd, unit=None)
-
-        return ParsedIngredient(text=clean_name(raw))
-
-    if isinstance(ingredients, list):
-        for raw in ingredients:
-            if isinstance(raw, str):
-                cleaned = _clean_text(raw)
-                if cleaned:
-                    parsed.append(split_line(cleaned))
-            elif isinstance(raw, dict):
-                text_val = raw.get("text") or raw.get("name")
-                if text_val:
-                    quantity = _clean_text(raw.get("amount") or raw.get("quantity") or "")
-                    unit = _clean_text(raw.get("unit") or "")
-                    # If dict still has combined text, try to split; otherwise use provided fields.
-                    if not quantity and not unit:
-                        parsed.append(split_line(text_val))
-                    else:
-                        parsed.append(
-                            ParsedIngredient(
-                                text=_clean_text(text_val),
-                                quantity_display=quantity or None,
-                                unit=unit or None,
-                            )
-                        )
-    return parsed
 
 
 async def fetch_html(url: str) -> str:
@@ -570,19 +751,112 @@ async def fetch_html(url: str) -> str:
     # The proxy returns text/plain; allow it.
     if "text/html" not in content_type and "text/plain" not in content_type:
         raise ValueError(f"Unsupported content type: {content_type}")
-    return response.text
+    
+    # Explicitly handle encoding to avoid garbled text
+    # httpx should handle decompression automatically, but we need to ensure proper encoding
+    try:
+        # Get the raw bytes first
+        content_bytes = response.content
+        
+        # Try to detect encoding from Content-Type header
+        encoding = None
+        if "charset=" in content_type.lower():
+            try:
+                encoding = content_type.split("charset=")[1].split(";")[0].strip().strip('"\'')
+            except (IndexError, AttributeError):
+                pass
+        
+        # If no encoding in header, try UTF-8 first (most common for modern websites)
+        if not encoding:
+            encoding = "utf-8"
+        
+        # Decode with detected/default encoding
+        try:
+            text = content_bytes.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            # If that fails, try to detect from HTML meta tag
+            try:
+                # Try UTF-8 first as fallback
+                text = content_bytes.decode("utf-8", errors="replace")
+                # Look for charset in HTML
+                encoding_match = re.search(r'<meta[^>]+charset=["\']?([^"\'>\s]+)', text, re.I)
+                if encoding_match:
+                    detected_encoding = encoding_match.group(1).lower()
+                    if detected_encoding and detected_encoding != "utf-8":
+                        try:
+                            text = content_bytes.decode(detected_encoding)
+                        except (UnicodeDecodeError, LookupError):
+                            # Keep the UTF-8 with replacement chars version
+                            pass
+            except Exception:
+                # Last resort: use response.text which should handle it
+                text = response.text
+        
+        # Validate that we got reasonable text (not binary garbage)
+        if text and len(text) > 100:
+            # Better validation: check for actual HTML structure, not just characters
+            # Look for common HTML tags and reasonable text content
+            has_html_tags = bool(re.search(r'<[a-z]+[^>]*>', text[:2000], re.I))
+            # Check for reasonable ratio of printable ASCII/Latin characters
+            sample = text[:2000]
+            printable_count = sum(1 for c in sample if (32 <= ord(c) <= 126) or c.isspace())
+            printable_ratio = printable_count / len(sample) if sample else 0
+            
+            # Check for excessive control characters or binary-looking sequences
+            control_chars = sum(1 for c in sample if ord(c) < 32 and c not in '\n\r\t')
+            control_ratio = control_chars / len(sample) if sample else 0
+            
+            # Valid HTML should have tags and mostly printable characters
+            if has_html_tags and printable_ratio > 0.6 and control_ratio < 0.1:
+                return text
+            else:
+                logger.warning(
+                    "HTML validation failed for %s: has_tags=%s, printable_ratio=%.2f, control_ratio=%.2f",
+                    url, has_html_tags, printable_ratio, control_ratio
+                )
+                # Raise a specific exception that can trigger webview fallback
+                raise ValueError("HTML content appears corrupted or invalid encoding")
+        
+        # If validation failed, try response.text as fallback
+        text_fallback = response.text
+        # Validate fallback too
+        if text_fallback and len(text_fallback) > 100:
+            has_html_tags = bool(re.search(r'<[a-z]+[^>]*>', text_fallback[:2000], re.I))
+            if has_html_tags:
+                return text_fallback
+        
+        raise ValueError("Unable to decode HTML content with valid encoding")
+    except ValueError:
+        # Re-raise ValueError (our validation errors)
+        raise
+    except Exception as exc:
+        logger.warning("Encoding error when fetching %s: %s. Attempting fallback.", url, exc)
+        # Last resort: try response.text
+        try:
+            text_fallback = response.text
+            if text_fallback and len(text_fallback) > 100:
+                has_html_tags = bool(re.search(r'<[a-z]+[^>]*>', text_fallback[:2000], re.I))
+                if has_html_tags:
+                    return text_fallback
+        except Exception:
+            pass
+        raise ValueError(f"HTML content encoding error: {exc}")
 
 
 def extract_recipe_from_schema_org(html: str, url: str) -> Optional[ParsedRecipe]:
     soup = BeautifulSoup(html, "lxml")
     scripts = soup.find_all("script", attrs={"type": "application/ld+json"})
-    for script in scripts:
+    logger.info("Found %d JSON-LD script blocks", len(scripts))
+    
+    for idx, script in enumerate(scripts):
         raw_json = script.string or script.get_text()
         if not raw_json:
+            logger.debug("JSON-LD block %d is empty", idx)
             continue
         try:
             data = json.loads(raw_json)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            logger.warning("JSON-LD block %d failed to parse: %s (first 200 chars: %s)", idx, exc, raw_json[:200])
             continue
 
         candidates = []
@@ -590,31 +864,92 @@ def extract_recipe_from_schema_org(html: str, url: str) -> Optional[ParsedRecipe
             graph = data.get("@graph") or []
             if isinstance(graph, list):
                 candidates.extend(graph)
+                logger.info("Found @graph with %d items", len(graph))
         if isinstance(data, list):
             candidates.extend(data)
+            logger.info("JSON-LD is a list with %d items", len(data))
         elif isinstance(data, dict):
             candidates.append(data)
+            logger.info("JSON-LD is a single object")
 
-        for obj in candidates:
-            obj_type = obj.get("@type") if isinstance(obj, dict) else None
+        for obj_idx, obj in enumerate(candidates):
+            if not isinstance(obj, dict):
+                continue
+            obj_type = obj.get("@type")
             if not obj_type:
+                logger.debug("Candidate %d has no @type", obj_idx)
                 continue
             types = [obj_type] if isinstance(obj_type, str) else obj_type
+            type_str = ", ".join(str(t) for t in types)
+            logger.info("Candidate %d has @type: %s", obj_idx, type_str)
+            
             if not any(str(t).lower() == "recipe" for t in types):
+                logger.debug("Candidate %d is not a Recipe (type: %s), skipping", obj_idx, type_str)
                 continue
 
             title = _clean_text(obj.get("name") or "")
-            ingredients = _extract_ingredients(obj.get("recipeIngredient") or [])
-            steps = _extract_instruction_text(obj.get("recipeInstructions") or [])
-            if not title or not ingredients or not steps:
+            recipe_ingredient_raw = obj.get("recipeIngredient") or []
+            recipe_instructions_raw = obj.get("recipeInstructions") or []
+            
+            logger.debug("Recipe candidate %d raw data: recipeIngredient type=%s, len=%s, recipeInstructions type=%s, len=%s",
+                        obj_idx, type(recipe_ingredient_raw).__name__, 
+                        len(recipe_ingredient_raw) if isinstance(recipe_ingredient_raw, (list, str)) else "N/A",
+                        type(recipe_instructions_raw).__name__,
+                        len(recipe_instructions_raw) if isinstance(recipe_instructions_raw, (list, str)) else "N/A")
+            
+            ingredients = _extract_ingredients(recipe_ingredient_raw)
+            steps = _extract_instruction_text(recipe_instructions_raw)
+            
+            # Handle None values from extraction functions
+            ingredients = ingredients or []
+            steps = steps or []
+            
+            logger.info("Recipe candidate %d: title=%s, ingredients=%d, steps=%d", 
+                       obj_idx, title[:50] if title else "None", len(ingredients), len(steps))
+            
+            if not title:
+                logger.warning("Recipe candidate %d missing title", obj_idx)
+                continue
+            if not ingredients:
+                logger.warning("Recipe candidate %d missing ingredients (raw had %d items)", 
+                             obj_idx, len(recipe_ingredient_raw) if isinstance(recipe_ingredient_raw, list) else 1 if recipe_ingredient_raw else 0)
+                # Log first ingredient to see what we're getting
+                if recipe_ingredient_raw and isinstance(recipe_ingredient_raw, list) and len(recipe_ingredient_raw) > 0:
+                    logger.warning("First ingredient raw: %s", str(recipe_ingredient_raw[0])[:200])
+                continue
+            if not steps:
+                logger.warning("Recipe candidate %d missing steps (raw had %d items)", 
+                             obj_idx, len(recipe_instructions_raw) if isinstance(recipe_instructions_raw, list) else 1 if recipe_instructions_raw else 0)
                 continue
 
+            # Extract tags, filtering out recipe-specific ones
+            keywords = obj.get("keywords")
+            recipe_category = obj.get("recipeCategory") or []
+            recipe_cuisine = obj.get("recipeCuisine") or []
+            
+            # Combine keywords with category and cuisine
+            all_keywords = []
+            if keywords:
+                all_keywords.append(keywords)
+            if recipe_category:
+                if isinstance(recipe_category, list):
+                    all_keywords.extend(recipe_category)
+                else:
+                    all_keywords.append(recipe_category)
+            if recipe_cuisine:
+                if isinstance(recipe_cuisine, list):
+                    all_keywords.extend(recipe_cuisine)
+                else:
+                    all_keywords.append(recipe_cuisine)
+            
+            tags = _coerce_keywords(all_keywords if all_keywords else None, recipe_title=title)
+            
             parsed = ParsedRecipe(
                 title=title,
                 description=_clean_text(obj.get("description") or ""),
                 source_url=url,
                 image_url=_extract_image(obj.get("image")),
-                tags=_coerce_keywords(obj.get("keywords")),
+                tags=tags,
                 servings=_parse_servings(obj.get("recipeYield")),
                 estimated_time_minutes=_parse_minutes(obj.get("totalTime")),
                 ingredients=ingredients,
@@ -683,7 +1018,7 @@ def extract_recipe_heuristic(html: str, url: str) -> Optional[ParsedRecipe]:
     return None
 
 
-def _clean_soup_for_content(soup: BeautifulSoup) -> None:
+def clean_soup_for_content(soup: BeautifulSoup) -> None:
     """Remove obvious boilerplate nodes before extracting candidate content."""
     for noisy in soup.find_all(["header", "footer", "nav", "aside", "form"]):
         noisy.decompose()
@@ -691,7 +1026,8 @@ def _clean_soup_for_content(soup: BeautifulSoup) -> None:
         tag.decompose()
 
 
-def _find_main_node(soup: BeautifulSoup) -> Optional[BeautifulSoup]:
+def find_main_node(soup: BeautifulSoup) -> Optional[BeautifulSoup]:
+    """Find the main content node in the soup, prioritizing recipe-specific containers."""
     return (
         soup.find(attrs={"itemtype": re.compile("Recipe", re.I)})  # recipe microdata container if present
         or soup.find("article")
@@ -721,23 +1057,109 @@ def _find_ingredient_items(container) -> List[str]:
 
 
 def _find_instruction_items(container) -> List[str]:
-    heading = container.find(string=re.compile("direction|instruction|method", re.I))
     steps: List[str] = []
-    if heading and heading.parent:
-        sibling = heading.parent.find_next_sibling(["ol", "ul", "p", "div"])
-        if sibling:
-            if sibling.name in {"ol", "ul"}:
-                steps = [li.get_text(" ", strip=True) for li in sibling.find_all("li")]
-            else:
-                steps = [p.get_text(" ", strip=True) for p in sibling.find_all("p")] or [sibling.get_text(" ", strip=True)]
+    
+    # Strategy 1: Look for ordered lists (most common for recipe steps)
+    ordered_lists = container.find_all("ol")
+    if ordered_lists:
+        # Find the best ordered list (usually the longest one with recipe-like content)
+        best_list = None
+        best_score = 0
+        for ol in ordered_lists:
+            items = [li.get_text(" ", strip=True) for li in ol.find_all("li")]
+            # Score based on length and presence of action verbs
+            score = len(items)
+            action_verbs = sum(1 for item in items if re.search(r'\b(cook|bake|add|mix|stir|heat|pour|season|chop|slice|dice|mince|preheat)\b', item, re.I))
+            score += action_verbs * 2
+            if score > best_score and len(items) >= 3:
+                best_score = score
+                best_list = ol
+        if best_list:
+            steps = [li.get_text(" ", strip=True) for li in best_list.find_all("li")]
+            return [_clean_text(s) for s in steps if _clean_text(s)]
+    
+    # Strategy 2: Look for headings like "How to make", "Instructions", "Directions", "Method"
+    instruction_patterns = [
+        r"how\s+to\s+make",
+        r"instructions?",
+        r"directions?",
+        r"method",
+        r"steps?",
+        r"preparation",
+    ]
+    
+    for pattern in instruction_patterns:
+        heading = container.find(string=re.compile(pattern, re.I))
+        if heading and heading.parent:
+            # Look for next sibling that contains steps
+            sibling = heading.parent.find_next_sibling(["ol", "ul", "div", "section"])
+            if sibling:
+                if sibling.name in {"ol", "ul"}:
+                    steps = [li.get_text(" ", strip=True) for li in sibling.find_all("li")]
+                else:
+                    # Look for paragraphs or list items within the sibling
+                    paragraphs = sibling.find_all("p")
+                    if paragraphs:
+                        steps = [p.get_text(" ", strip=True) for p in paragraphs]
+                    else:
+                        list_items = sibling.find_all("li")
+                        if list_items:
+                            steps = [li.get_text(" ", strip=True) for li in list_items]
+                        else:
+                            # Try to extract structured content (headings with following text)
+                            headings = sibling.find_all(["h2", "h3", "h4", "strong", "b"])
+                            for h in headings:
+                                step_text = h.get_text(" ", strip=True)
+                                # Get following text until next heading or end
+                                next_elem = h.find_next_sibling()
+                                if next_elem and next_elem.name not in ["h2", "h3", "h4", "strong", "b"]:
+                                    step_text += " " + next_elem.get_text(" ", strip=True)
+                                if step_text and len(step_text) > 10:
+                                    steps.append(step_text)
+            if steps:
+                break
+    
+    # Strategy 3: Look for structured recipe steps (headings like "Step 1:", "1.", etc.)
+    if not steps:
+        # Find all headings that look like step headers
+        step_headings = container.find_all(string=re.compile(r'^(step\s+\d+|cook|bake|make|prep|prepare|season|add|mix|stir|heat|pour)', re.I))
+        for heading_text in step_headings:
+            parent = heading_text.parent
+            if parent:
+                # Get the text content following this heading
+                step_content = parent.get_text(" ", strip=True)
+                # Also try to get next sibling content
+                next_sib = parent.find_next_sibling()
+                if next_sib:
+                    step_content += " " + next_sib.get_text(" ", strip=True)
+                if step_content and len(step_content) > 20:
+                    steps.append(step_content)
+    
+    # Strategy 4: Fallback - look for any ordered list
     if not steps:
         ordered_lists = container.find_all("ol")
         if ordered_lists:
-            steps = [li.get_text(" ", strip=True) for li in ordered_lists[0].find_all("li")]
+            # Use the longest ordered list
+            longest = max(ordered_lists, key=lambda ol: len(ol.find_all("li")))
+            steps = [li.get_text(" ", strip=True) for li in longest.find_all("li")]
+    
     return [_clean_text(s) for s in steps if _clean_text(s)]
 
 
 def _build_llm_content(html: str) -> Tuple[Optional[str], str]:
+    # Safety check: detect if HTML is corrupted before processing
+    if html and len(html) > 100:
+        sample = html[:2000]
+        printable_count = sum(1 for c in sample if (32 <= ord(c) <= 126) or c.isspace())
+        printable_ratio = printable_count / len(sample) if sample else 0
+        control_chars = sum(1 for c in sample if ord(c) < 32 and c not in '\n\r\t')
+        control_ratio = control_chars / len(sample) if sample else 0
+        
+        # If too many control characters or too few printable chars, HTML is likely corrupted
+        if printable_ratio < 0.5 or control_ratio > 0.15:
+            logger.warning("Detected corrupted HTML in _build_llm_content: printable_ratio=%.2f, control_ratio=%.2f", printable_ratio, control_ratio)
+            raise ValueError("HTML content appears corrupted - encoding error detected")
+    
     soup = BeautifulSoup(html, "lxml")
     title_tag = soup.find("h1") or soup.title
     title = _clean_text(title_tag.get_text()) if title_tag else None
@@ -749,8 +1171,8 @@ def _build_llm_content(html: str) -> Tuple[Optional[str], str]:
         if txt:
             script_texts.append(txt[:2000])
 
-    _clean_soup_for_content(soup)
-    main_node = _find_main_node(soup)
+    clean_soup_for_content(soup)
+    main_node = find_main_node(soup)
     if not main_node:
         combined = "\n".join(script_texts)[:6000]
         return title, combined
@@ -760,19 +1182,26 @@ def _build_llm_content(html: str) -> Tuple[Optional[str], str]:
 
     parts: List[str] = []
     if ingredients:
-        parts.append("Ingredients:\n" + "\n".join(ingredients[:80]))
+        # Include all ingredients (they're usually not that many)
+        parts.append("Ingredients:\n" + "\n".join(ingredients))
     if instructions:
-        parts.append("Instructions:\n" + "\n".join(instructions[:120]))
+        # Include all instructions - don't truncate steps
+        # Steps are critical for recipe parsing
+        parts.append("Instructions:\n" + "\n".join(instructions))
 
-    # Fallback: include a small slice of main text if parts are thin
+    # Fallback: include a larger slice of main text if parts are thin
+    # This helps when structured extraction fails
     if len("\n\n".join(parts)) < 500:
         text = main_node.get_text("\n", strip=True)
         text = re.sub(r"\n{2,}", "\n", text)
         lines = text.splitlines()
-        parts.append("\n".join(lines[:120]))
+        # Include more lines for fallback (up to 200)
+        parts.append("\n".join(lines[:200]))
 
     combined = (title + "\n" if title else "") + "\n\n".join([p for p in parts if p])
-    combined = combined[:6000]
+    # Increase limit to 10000 to ensure we capture full recipe steps
+    # LLM can handle this size, and steps are critical
+    combined = combined[:10000]
     return title, combined
 
 
@@ -785,40 +1214,19 @@ async def extract_recipe_via_llm(html: str, url: str, metadata: Optional[dict] =
     title, truncated_text = _build_llm_content(html)
 
     system_prompt = (
-        "You are a recipe extraction engine. Given noisy HTML-derived text, you extract a single recipe "
-        "and output ONLY strict JSON that matches the provided schema. Do not include markdown, code fences, "
-        "explanations, or any text before/after the JSON. If you cannot produce valid JSON for the schema, "
-        'return exactly: {"error":"invalid"}'
+        "Extract recipe from HTML text. Return ONLY valid JSON matching the schema. "
+        "If invalid, return {\"error\":\"invalid\"}."
     )
     user_prompt = (
-        f"Extract a single recipe from the page at URL: {url}\n"
-        f"Page title: {title or 'Unknown'}\n"
-        f"Main content (truncated):\n{truncated_text}\n\n"
-        "The JSON schema you must follow is:\n"
-        "{\n"
-        '  "title": "string",\n'
-        '  "description": "string or null",\n'
-        '  "source_url": "string or null",\n'
-        '  "image_url": "string or null",\n'
-        '  "tags": ["string"],\n'
-        '  "servings": "number or null",\n'
-        '  "estimated_time_minutes": "number or null",\n'
-        '  "ingredients": [\n'
-        '    {\n'
-        '      "text": "ingredient name only, no quantity or unit",\n'
-        '      "quantity_display": "original quantity string like \\"1/2\\" or \\"2\\", or null",\n'
-        '      "unit": "unit of measure like \\"cup\\", \\"tsp\\", \\"g\\", or null"\n'
-        "    }\n"
-        "  ],\n"
-        '  "steps": ["string"],\n'
-        '  "notes": ["string"]\n'
-        "}\n"
+        f"URL: {url}\nTitle: {title or 'Unknown'}\nContent:\n{truncated_text}\n\n"
+        "Schema: {\"title\":string,\"description\":string|null,\"source_url\":string|null,\"image_url\":string|null,"
+        "\"tags\":[\"string\"],\"servings\":number|null,\"estimated_time_minutes\":number|null,"
+        "\"ingredients\":[{\"text\":string,\"quantity_display\":string|null,\"unit\":string|null}],"
+        "\"steps\":[\"string\"],\"notes\":[\"string\"]}\n\n"
         "Rules:\n"
-        "- Do NOT put quantities or units into ingredient.text. Keep name only (e.g., 'all-purpose flour').\n"
-        "- Put the numeric/fractional amount into quantity_display exactly as written in the source (e.g., '1/4', '2').\n"
-        "- Put the unit (if any) into unit (e.g., 'cup', 'tsp'). If no unit, set unit=null.\n"
-        "- If a combined string lacks a unit, still split amount into quantity_display and name into text.\n"
-        "- Output ONLY one JSON object of that form."
+        "- Separate ingredients: 'salt and pepper' = 2 entries\n"
+        "- Extract units: '1 cup flour' → text:'flour', quantity_display:'1', unit:'cup'\n"
+        "- Tags: general categories only (e.g., 'chicken', 'dinner'), not recipe names\n"
     )
 
     model_name = settings.llm_full_model_name or "full"
@@ -826,6 +1234,7 @@ async def extract_recipe_via_llm(html: str, url: str, metadata: Optional[dict] =
     payload = {
         "model": model_name,
         "temperature": 0.0,
+        "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -834,13 +1243,13 @@ async def extract_recipe_via_llm(html: str, url: str, metadata: Optional[dict] =
         "stream": False,
     }
 
-    if not settings.llm_app_id or not settings.llm_app_key:
-        raise ValueError("LLM app credentials are not configured")
+    if not settings.jarvis_auth_app_id or not settings.jarvis_auth_app_key:
+        raise ValueError("JARVIS_AUTH_APP_ID and JARVIS_AUTH_APP_KEY must be set for LLM proxy authentication")
 
     headers = {
         "Content-Type": "application/json",
-        "X-Jarvis-App-Id": settings.llm_app_id,
-        "X-Jarvis-App-Key": settings.llm_app_key,
+        "X-Jarvis-App-Id": settings.jarvis_auth_app_id,
+        "X-Jarvis-App-Key": settings.jarvis_auth_app_key,
     }
 
     # Background-friendly: allow longer LLM response time.
@@ -852,6 +1261,20 @@ async def extract_recipe_via_llm(html: str, url: str, metadata: Optional[dict] =
     response.raise_for_status()
 
     data = response.json()
+    
+    # Check for error response from LLM proxy (per PRD: json-response-format-support.md)
+    if isinstance(data, dict) and "error" in data:
+        error_info = data["error"]
+        error_type = error_info.get("type", "unknown_error")
+        error_message = error_info.get("message", "Unknown error")
+        logger.error(
+            "LLM proxy returned error for url=%s: type=%s, message=%s",
+            url,
+            error_type,
+            error_message[:500],
+        )
+        raise ValueError(f"LLM proxy error ({error_type}): {error_message}")
+    
     content = None
     if isinstance(data, dict):
         if "choices" in data and data["choices"]:
@@ -867,6 +1290,15 @@ async def extract_recipe_via_llm(html: str, url: str, metadata: Optional[dict] =
 
     if not content or not isinstance(content, str):
         raise ValueError("LLM response missing assistant content")
+    
+    # With response_format: {"type": "json_object"}, the proxy should return valid JSON
+    # Log if content doesn't look like JSON (starts with { or [)
+    if content.strip() and not (content.strip().startswith("{") or content.strip().startswith("[")):
+        logger.warning(
+            "LLM response with json_object format doesn't start with {{ or [: url=%s, content_preview=%s",
+            url,
+            content[:200],
+        )
 
     # Persist full raw content to a tmp file for debugging malformed JSON.
     def _write_llm_debug(raw: str) -> None:
@@ -946,7 +1378,7 @@ def normalize_parsed_recipe(parsed: ParsedRecipe) -> RecipeCreate:
         image_url=parsed.image_url,
         ingredients=ingredients,
         steps=steps,
-        tags=parsed.tags or [],
+        tags=_coerce_keywords(parsed.tags, recipe_title=parsed.title) if parsed.tags else [],
     )
 
 
@@ -955,12 +1387,28 @@ async def parse_recipe_from_url(url: str, use_llm_fallback: bool = True) -> Pars
     try:
         html = await fetch_html(url)
     except ValueError as exc:
-        return ParseResult(
-            success=False,
-            error_code="invalid_url",
-            error_message=str(exc),
-            warnings=warnings,
-        )
+        error_msg = str(exc)
+        # Check if this is an encoding/corruption error (not just invalid URL)
+        is_encoding_error = "encoding" in error_msg.lower() or "corrupted" in error_msg.lower() or "invalid encoding" in error_msg.lower()
+        
+        if is_encoding_error:
+            logger.warning("Encoding/corruption error for %s: %s. Suggesting webview fallback.", url, error_msg)
+            return ParseResult(
+                success=False,
+                error_code="fetch_failed",
+                error_message=error_msg,
+                warnings=warnings + ["encoding_error"],
+                next_action="webview_extract",
+                next_action_reason="encoding_error",
+            )
+        else:
+            # Regular invalid URL error
+            return ParseResult(
+                success=False,
+                error_code="invalid_url",
+                error_message=error_msg,
+                warnings=warnings,
+            )
     except httpx.HTTPStatusError as exc:
         logger.exception("Failed to fetch URL %s (status=%s)", url, exc.response.status_code if exc.response else "unknown")
         return ParseResult(
@@ -999,6 +1447,22 @@ async def parse_recipe_from_url(url: str, use_llm_fallback: bool = True) -> Pars
             warnings.append("LLM fallback used; please verify ingredients.")
             parsed.ingredients = _clean_parsed_ingredients(parsed.ingredients)
             return ParseResult(success=True, recipe=parsed, used_llm=True, parser_strategy="llm_fallback", warnings=warnings)
+        except ValueError as exc:
+            # Encoding/corruption error detected in _build_llm_content
+            error_msg = str(exc)
+            if "corrupted" in error_msg.lower() or "encoding" in error_msg.lower():
+                logger.warning("Encoding error detected in LLM path for %s: %s. Suggesting webview fallback.", url, error_msg)
+                return ParseResult(
+                    success=False,
+                    error_code="fetch_failed",
+                    error_message=error_msg,
+                    warnings=warnings + ["encoding_error"],
+                    next_action="webview_extract",
+                    next_action_reason="encoding_error",
+                )
+            else:
+                # Other ValueError, re-raise or handle as generic error
+                raise
         except httpx.TimeoutException as exc:
             logger.exception("LLM fallback timeout for %s", url)
             return ParseResult(

@@ -12,6 +12,15 @@ from jarvis_recipes.app.schemas.ingestion import RecipeDraft
 logger = logging.getLogger(__name__)
 
 
+# Remove ASCII control chars that frequently break json.loads (except \n, \r, \t)
+def _strip_invalid_control_chars(s: str) -> str:
+    """Remove ASCII control chars that frequently break json.loads (except \n, \r, \t)."""
+    if not isinstance(s, str):
+        return str(s)
+    # Remove 0x00-0x1F excluding tab(\x09), lf(\x0A), cr(\x0D)
+    return re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", s)
+
+
 def _coerce_recipe_draft(obj: Any, source_type: str = "image") -> RecipeDraft:
     """
     Accepts various JSON shapes and coerces into RecipeDraft.
@@ -33,8 +42,14 @@ def _coerce_recipe_draft(obj: Any, source_type: str = "image") -> RecipeDraft:
         data = json.loads(cleaned)
     if isinstance(data, dict) and "recipe" in data:
         data = data["recipe"]
+    # Check for error field - only raise if it's a meaningful error (not just "{" or empty)
     if isinstance(data, dict) and data.get("error"):
-        raise ValueError(f"LLM returned error: {data.get('error')}")
+        error_val = data.get("error")
+        # Only treat as error if it's a non-empty string or meaningful dict
+        if isinstance(error_val, str) and error_val.strip() and error_val.strip() != "{":
+            raise ValueError(f"LLM returned error: {error_val}")
+        elif isinstance(error_val, dict) and (error_val.get("message") or error_val.get("code")):
+            raise ValueError(f"LLM returned error: {error_val}")
     # If already valid, let pydantic handle it
     try:
         draft = RecipeDraft.model_validate(data)
@@ -146,7 +161,8 @@ def _coerce_recipe_draft(obj: Any, source_type: str = "image") -> RecipeDraft:
     steps = []
     for st in steps_in:
         if isinstance(st, dict):
-            step_text = st.get("text") or st.get("description") or st.get("label") or ""
+            # Handle various step formats: {"text": "..."}, {"action": "..."}, {"description": "..."}, {"label": "..."}
+            step_text = st.get("text") or st.get("action") or st.get("description") or st.get("label") or ""
             step_text = step_text.strip()
             if step_text:
                 steps.append(step_text)
@@ -172,21 +188,66 @@ def _coerce_recipe_draft(obj: Any, source_type: str = "image") -> RecipeDraft:
         except Exception:
             total_time = 0
 
-    # Normalize ingredients: if quantity is empty but name starts with qty/unit, split it out
+    # Normalize ingredients: extract qty/unit from quantity field or name if needed
     normalized_ingredients = []
     for ing in ingredients:
         qty = ing["quantity"]
         unit = ing["unit"]
         name = ing["name"] or ""
-        if (not qty) and name:
+        
+        # If quantity contains text beyond just a number (e.g., "1 cup mayonnaise" or "2 cups"),
+        # extract the number and unit from it
+        if qty and isinstance(qty, str):
+            # Check if quantity contains both numbers and letters (indicating it has units or ingredient names)
+            # We need both to ensure we're not trying to extract from a pure unit like "cup"
+            has_numbers = bool(re.search(r'[\d\/¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]', qty))
+            has_letters = bool(re.search(r'[A-Za-z]', qty))
+            if has_numbers and has_letters:
+                extracted = _extract_qty_from_text(qty)
+                if extracted:
+                    qty_extracted, unit_extracted, name_rest = extracted
+                    # Always use the extracted quantity (it should be just the number)
+                    if qty_extracted:
+                        qty = qty_extracted
+                    # Set unit from extraction if we got one (prefer extracted over existing if both exist)
+                    if unit_extracted:
+                        unit = unit_extracted
+                    # Only use name_rest if we don't already have a name
+                    if name_rest and not name:
+                        name = name_rest
+                else:
+                    # Extraction failed - if quantity looks like it's just a unit (no numbers), clear it
+                    if not has_numbers and has_letters:
+                        # This is likely a unit that got put in the quantity field by mistake
+                        if not unit:
+                            unit = qty
+                        qty = None
+        
+        # If quantity is empty but name starts with qty/unit, split it out
+        if (not qty or qty == "") and name:
             extracted = _extract_qty_from_text(name)
             if extracted:
-                qty, unit_extracted, name_rest = extracted
+                qty_extracted, unit_extracted, name_rest = extracted
+                qty = qty_extracted
                 unit = unit or unit_extracted
-                name = name_rest or name
-        normalized_ingredients.append(
-            {"name": name, "quantity": qty, "unit": unit, "notes": ing.get("notes")}
-        )
+                # Preserve the name_rest, but fall back to original name if name_rest is empty
+                name = name_rest if name_rest else name
+        
+        # Normalize empty strings to None
+        if qty == "":
+            qty = None
+        if unit == "":
+            unit = None
+        if ing.get("notes") == "":
+            notes = None
+        else:
+            notes = ing.get("notes")
+        
+        # Only add ingredients that have a non-empty name (required by schema)
+        if name and name.strip():
+            normalized_ingredients.append(
+                {"name": name.strip(), "quantity": qty, "unit": unit, "notes": notes}
+            )
 
     draft_data = {
         "title": title,
@@ -230,7 +291,7 @@ def _fallback_draft(reason: str, source_type: str = "image") -> RecipeDraft:
 
 
 def _try_local_json_repair(raw: str) -> Optional[str]:
-    cleaned = raw.strip()
+    cleaned = _strip_invalid_control_chars(raw).strip()
     cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", cleaned)
     cleaned = re.sub(r"\s*```$", "", cleaned)
     if cleaned.startswith("{") and cleaned.endswith("}"):
@@ -256,21 +317,15 @@ async def _repair_json_via_full_llm(broken_json: str, schema_hint: str, timeout_
     payload = {
         "model": settings.llm_full_model_name or "full",
         "temperature": 0.0,
+        "response_format": {"type": "json_object"},
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "You repair malformed JSON to match the given schema. "
-                    "Return ONLY valid JSON. No markdown, no code fences."
-                ),
+                "content": "Repair malformed JSON to match the schema. Return ONLY valid JSON.",
             },
             {
                 "role": "user",
-                "content": (
-                    f"Schema: {schema_hint}\n"
-                    f"Malformed JSON:\n{broken_json}\n"
-                    "Return valid JSON only."
-                ),
+                "content": f"Schema: {schema_hint}\nMalformed JSON:\n{broken_json}",
             },
         ],
         "max_tokens": 800,
@@ -286,6 +341,19 @@ async def _repair_json_via_full_llm(broken_json: str, schema_hint: str, timeout_
     if resp.status_code >= 400:
         return None
     data = resp.json()
+    
+    # Check for error response from LLM proxy (per PRD: json-response-format-support.md)
+    if isinstance(data, dict) and "error" in data:
+        error_info = data["error"]
+        error_type = error_info.get("type", "unknown_error")
+        error_message = error_info.get("message", "Unknown error")
+        logger.warning(
+            "LLM proxy returned error in JSON repair: type=%s, message=%s",
+            error_type,
+            error_message[:500],
+        )
+        return None
+    
     content = data.get("choices", [{}])[0].get("message", {}).get("content")
     if not content:
         return None
@@ -301,16 +369,17 @@ async def _repair_json_via_full_llm(broken_json: str, schema_hint: str, timeout_
 
 def _headers() -> Dict[str, str]:
     settings = get_settings()
-    if not settings.llm_app_id or not settings.llm_app_key:
-        raise ValueError("LLM app credentials are not configured")
+    if not settings.jarvis_auth_app_id or not settings.jarvis_auth_app_key:
+        raise ValueError("JARVIS_AUTH_APP_ID and JARVIS_AUTH_APP_KEY must be set for LLM proxy authentication")
     return {
         "Content-Type": "application/json",
-        "X-Jarvis-App-Id": settings.llm_app_id,
-        "X-Jarvis-App-Key": settings.llm_app_key,
+        "X-Jarvis-App-Id": settings.jarvis_auth_app_id,
+        "X-Jarvis-App-Key": settings.jarvis_auth_app_key,
     }
 
 
 async def _parse_with_repair(raw_content: str, source_type: str) -> RecipeDraft:
+    raw_content = _strip_invalid_control_chars(raw_content)
     try:
         return _coerce_recipe_draft(raw_content, source_type=source_type)
     except Exception:
@@ -333,6 +402,103 @@ async def _parse_with_repair(raw_content: str, source_type: str) -> RecipeDraft:
         raise
 
 
+async def clean_and_validate_draft(draft: RecipeDraft, model_name: str) -> RecipeDraft:
+    """
+    Clean and validate a recipe draft using the lightweight model.
+    
+    This post-processing step:
+    - Separates ingredients properly (ensures each ingredient is distinct)
+    - Removes units of measure from ingredient names (moves to unit field)
+    - Adds description if missing
+    - Validates and fixes any formatting issues
+    
+    Args:
+        draft: The RecipeDraft to clean
+        model_name: The lightweight model name to use
+    
+    Returns:
+        Cleaned RecipeDraft
+    """
+    settings = get_settings()
+    
+    # Convert draft to JSON for the LLM
+    draft_json = draft.model_dump(mode="json")
+    
+    payload = {
+        "model": model_name or settings.llm_lightweight_model_name or "lightweight",
+        "temperature": 0.0,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Clean recipe data. Return ONLY valid JSON matching RecipeDraft schema.\n\n"
+                    "Rules:\n"
+                    "- Separate ingredients: 'salt and pepper' = 2 entries\n"
+                    "- Extract units from names: '1 cup flour' → quantity:'1', unit:'cup', name:'flour'\n"
+                    "- Put prep notes in 'notes' field\n"
+                    "- Add description if missing (1-2 sentences based on title/ingredients)\n"
+                    "- Preserve all valid data, only clean formatting\n"
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Clean this recipe:\n{json.dumps(draft_json, indent=2)}",
+            },
+        ],
+        "max_tokens": 1000,
+        "stream": False,
+    }
+    
+    timeout = httpx.Timeout(30.0, read=30.0, connect=10.0)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{settings.llm_base_url}/v1/chat/completions",
+                json=payload,
+                headers=_headers(),
+            )
+        resp.raise_for_status()
+        data = resp.json()
+        
+        # Check for error response
+        if isinstance(data, dict) and "error" in data:
+            error_info = data["error"]
+            error_type = error_info.get("type", "unknown_error")
+            error_message = error_info.get("message", "Unknown error")
+            logger.warning(
+                "LLM proxy returned error in draft cleaning: type=%s, message=%s",
+                error_type,
+                error_message[:500],
+            )
+            # Return original draft if cleaning fails
+            return draft
+        
+        content = data.get("choices", [{}])[0].get("message", {}).get("content")
+        if not content:
+            logger.warning("Draft cleaning returned empty content, using original draft")
+            return draft
+        
+        # Parse the cleaned draft
+        cleaned_content = content.strip()
+        cleaned_content = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", cleaned_content)
+        cleaned_content = re.sub(r"\s*```$", "", cleaned_content)
+        
+        try:
+            cleaned_data = json.loads(cleaned_content)
+            cleaned_draft = _coerce_recipe_draft(cleaned_data, source_type=draft.source.type if draft.source else "ocr")
+            logger.info("Draft cleaned successfully: %d ingredients, %d steps", 
+                       len(cleaned_draft.ingredients), len(cleaned_draft.steps))
+            return cleaned_draft
+        except Exception as exc:
+            logger.warning("Failed to parse cleaned draft, using original: %s", exc)
+            return draft
+    
+    except Exception as exc:
+        logger.warning("Draft cleaning failed, using original draft: %s", exc)
+        return draft
+
+
 async def call_text_structuring(text: str, model_name: str) -> RecipeDraft:
     settings = get_settings()
     payload = {
@@ -343,16 +509,23 @@ async def call_text_structuring(text: str, model_name: str) -> RecipeDraft:
             {
                 "role": "system",
                 "content": (
-                    "You convert OCR'd recipe text into strict JSON matching the RecipeDraft schema. "
-                    "Return ONLY JSON, no markdown or prose. "
-                    "If the text is not a coherent recipe (no clear title, fewer than 2 ingredients or 2 steps, or largely gibberish), "
-                    "return {\"error\":\"garbage_ocr\"}. "
-                    "If you cannot produce valid JSON for other reasons, return {\"error\":\"invalid\"}."
+                    "Convert OCR text to RecipeDraft JSON. Return ONLY JSON.\n\n"
+                    "Schema: {\"title\":string,\"description\":string|null,\"ingredients\":[{\"name\":string,\"quantity\":string|null,\"unit\":string|null,\"notes\":string|null}],"
+                    "\"steps\":[string],\"prep_time_minutes\":int,\"cook_time_minutes\":int,\"total_time_minutes\":int,\"servings\":string|number|null,\"tags\":[string],\"source\":{\"type\":\"ocr\"}}\n\n"
+                    "Rules:\n"
+                    "- Separate ingredients: 'salt and pepper' = 2 entries\n"
+                    "- Extract units from names: '1 cup flour' → quantity:'1', unit:'cup', name:'flour'\n"
+                    "- Put prep notes in 'notes' field\n"
+                    "- Use 0 for unknown time fields, null for missing description\n"
+                    "- If not a valid recipe, return {\"error\":\"garbage_ocr\"}\n"
                 ),
             },
-            {"role": "user", "content": text},
+            {
+                "role": "user",
+                "content": f"OCR TEXT (verbatim):\n<<<OCR_START>>>\n{text}\n<<<OCR_END>>>",
+            },
         ],
-        "max_tokens": 800,
+        "max_tokens": 1100,
         "stream": False,
     }
     timeout = httpx.Timeout(60.0, read=60.0, connect=10.0)
@@ -364,12 +537,28 @@ async def call_text_structuring(text: str, model_name: str) -> RecipeDraft:
         )
     resp.raise_for_status()
     data = resp.json()
+    
+    # Check for error response from LLM proxy (per PRD: json-response-format-support.md)
+    if isinstance(data, dict) and "error" in data:
+        error_info = data["error"]
+        error_type = error_info.get("type", "unknown_error")
+        error_message = error_info.get("message", "Unknown error")
+        logger.error(
+            "LLM proxy returned error in text structuring: type=%s, message=%s",
+            error_type,
+            error_message[:500],
+        )
+        raise ValueError(f"LLM proxy error ({error_type}): {error_message}")
+    
     content = data.get("choices", [{}])[0].get("message", {}).get("content")
     logger.info("text llm raw content: %s", content if isinstance(content, str) else str(content))
     if not content:
         raise ValueError("LLM text structuring missing content")
     raw_content = content if isinstance(content, str) else str(content)
     return await _parse_with_repair(raw_content, source_type="ocr")
+
+
+# Vision and Cloud OCR are now handled by the OCR service via llm_proxy_vision and llm_proxy_cloud providers
 
 
 async def call_meal_plan_select(
@@ -472,6 +661,24 @@ async def call_meal_plan_select(
             }
         
         data = resp.json()
+        
+        # Check for error response from LLM proxy (per PRD: json-response-format-support.md)
+        if isinstance(data, dict) and "error" in data:
+            error_info = data["error"]
+            error_type = error_info.get("type", "unknown_error")
+            error_message = error_info.get("message", "Unknown error")
+            logger.warning(
+                "LLM proxy returned error in meal plan selection: type=%s, message=%s",
+                error_type,
+                error_message[:500],
+            )
+            return {
+                "selected_recipe_id": None,
+                "confidence": 0.0,
+                "reason": f"LLM proxy error ({error_type})",
+                "warnings": ["LLM proxy error"],
+            }
+        
         content = data.get("choices", [{}])[0].get("message", {}).get("content")
         
         if not content:
@@ -544,96 +751,4 @@ async def call_meal_plan_select(
             "warnings": ["LLM error"],
             "alternatives": [],
         }
-
-
-async def call_vision_single(
-    image: bytes,
-    model_name: str,
-    current_draft: Dict[str, Any],
-    image_index: int,
-    image_count: int,
-    is_final_image: bool,
-    title_hint: Optional[str] = None,
-    timeout_seconds: int = 180,
-) -> Tuple[RecipeDraft, List[str]]:
-    settings = get_settings()
-    b64_image = {
-        "type": "image_url",
-        "image_url": {"url": f"data:image/jpeg;base64,{base64.b64encode(image).decode()}"},
-    }
-    user_content = [
-        {
-            "type": "text",
-            "text": (
-                "You will update the current recipe draft using ONLY the provided image. "
-                "Return ONLY valid JSON for the recipe. If you cannot produce valid JSON, return {\"error\":\"invalid\"}."
-            ),
-        }
-    ] + [b64_image]
-    payload = {
-        "model": model_name or settings.llm_vision_model_name or "vision",
-        "temperature": 0.0,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are extracting a cooking recipe from images, one image at a time. "
-                    "You will receive a JSON draft and one image. Update the draft using only the information visible in the image. "
-                    "Preserve existing fields unless contradicted by clear evidence. Deduplicate ingredients and steps. "
-                    "Return ONLY valid JSON for the full recipe draft. No markdown or commentary. "
-                    'If you cannot produce valid JSON, return {"error":"invalid"}.'
-                ),
-            },
-            {
-                "role": "user",
-                "content": user_content,
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": json.dumps({
-                        "current_draft": current_draft,
-                        "image_index": image_index,
-                        "image_count": image_count,
-                        "is_final_image": is_final_image,
-                        "title_hint": title_hint,
-                    })}
-                ],
-            },
-        ],
-        "max_tokens": 1000,
-        "stream": False,
-    }
-    timeout = httpx.Timeout(timeout_seconds, read=timeout_seconds, connect=20.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(
-            f"{settings.llm_base_url}/v1/chat/completions",
-            json=payload,
-            headers=_headers(),
-        )
-    if resp.status_code >= 400:
-        body = resp.text
-        logger.error(
-            "vision llm request failed: status=%s images=%s total_image_bytes=%s body=%s",
-            resp.status_code,
-            1,
-            len(image),
-            body[:4000],
-        )
-        resp.raise_for_status()
-    data = resp.json()
-    content = data.get("choices", [{}])[0].get("message", {}).get("content")
-    logger.info("vision llm raw content: %s", content if isinstance(content, str) else str(content))
-    if not content:
-        raise ValueError("LLM vision missing content")
-    raw_content = content if isinstance(content, str) else str(content)
-    try:
-        parsed = await _parse_with_repair(raw_content, source_type="image")
-        return parsed, []
-    except Exception as exc:  # noqa: BLE001
-        warning = str(exc)
-        logger.warning("Vision LLM returned error, using fallback draft: %s", warning)
-        fallback = _fallback_draft(warning, source_type="image")
-        return fallback, [warning]
 
