@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import uuid
 from datetime import datetime, timedelta
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from jarvis_recipes.app.db import models
 from jarvis_recipes.app.services import queue_service, url_recipe_parser
+
+logger = logging.getLogger(__name__)
 
 
 def _split_qty_unit(qty: str) -> Tuple[str | None, str | None]:
@@ -174,8 +177,13 @@ def mark_running(db: Session, job: models.RecipeParseJob) -> None:
     job.status = RecipeParseJobStatus.RUNNING.value
     job.started_at = datetime.utcnow()
     job.attempts = (job.attempts or 0) + 1
-    db.commit()
-    db.refresh(job)
+    try:
+        db.commit()
+        db.refresh(job)
+    except Exception as exc:
+        logger.exception("Failed to mark job %s as running: %s", job.id, exc)
+        db.rollback()
+        raise
 
 
 def mark_complete(db: Session, job: models.RecipeParseJob, result: url_recipe_parser.ParseResult) -> None:
@@ -247,8 +255,13 @@ def mark_complete(db: Session, job: models.RecipeParseJob, result: url_recipe_pa
         }
     else:
         job.result_json = payload
-    db.commit()
-    db.refresh(job)
+    try:
+        db.commit()
+        db.refresh(job)
+    except Exception as exc:
+        logger.exception("Failed to mark job %s as complete: %s", job.id, exc)
+        db.rollback()
+        raise
 
 
 def mark_error(db: Session, job: models.RecipeParseJob, error_code: str, error_message: str) -> None:
@@ -258,8 +271,13 @@ def mark_error(db: Session, job: models.RecipeParseJob, error_code: str, error_m
     job.completed_at = datetime.utcnow()
     job.error_code = error_code
     job.error_message = error_message
-    db.commit()
-    db.refresh(job)
+    try:
+        db.commit()
+        db.refresh(job)
+    except Exception as exc:
+        logger.exception("Failed to mark job %s as error: %s", job.id, exc)
+        db.rollback()
+        raise
 
 
 def mark_committed(db: Session, job: models.RecipeParseJob) -> None:
@@ -281,9 +299,14 @@ def mark_canceled(db: Session, job: models.RecipeParseJob) -> bool:
         return False
     job.status = RecipeParseJobStatus.CANCELED.value
     job.canceled_at = datetime.utcnow()
-    db.commit()
-    db.refresh(job)
-    return True
+    try:
+        db.commit()
+        db.refresh(job)
+        return True
+    except Exception as exc:
+        logger.exception("Failed to mark job %s as canceled: %s", job.id, exc)
+        db.rollback()
+        raise
 
 
 def abandon_stale_jobs(db: Session, cutoff_minutes: int) -> int:

@@ -36,9 +36,13 @@ def process_job(payload_json: str) -> None:
     - New envelope format (per PRD queue-flow.md)
     - Legacy format (for backwards compatibility)
     
+    All exceptions are caught and handled gracefully to prevent worker crashes.
+    
     Args:
         payload_json: JSON string containing either envelope or legacy format
     """
+    db = None
+    job_id = None
     try:
         envelope = json.loads(payload_json)
         
@@ -53,7 +57,8 @@ def process_job(payload_json: str) -> None:
             
             logger.info("Processing job %s (%s) from envelope format", job_id, job_type)
             
-            with SessionLocal() as db:
+            db = SessionLocal()
+            try:
                 # For ocr.completed events, use workflow_id or parent_job_id to find the original job
                 # (job_id is a new UUID created by OCR service)
                 if job_type == "ocr.completed":
@@ -75,32 +80,56 @@ def process_job(payload_json: str) -> None:
                     return
                 
                 # Mark as running
-                parse_job_service.mark_running(db, job)
+                try:
+                    parse_job_service.mark_running(db, job)
+                except Exception as exc:
+                    logger.exception("Failed to mark job %s as running: %s", job_id, exc)
+                    db.rollback()
+                    # Continue anyway - job might already be running
                 
                 # Route to appropriate handler based on job_type
-                if job_type == "ocr.completed":
-                    _process_ocr_completed(db, job, payload, parent_job_id)
-                elif job_type == "recipe.import.url.requested":
-                    _process_url_job(db, job)
-                elif job_type == "recipe.create.manual.requested":
-                    # Manual entry - not implemented yet
-                    parse_job_service.mark_error(db, job, "not_implemented", "Manual entry not yet implemented")
-                elif job_type == "ingestion":
-                    _process_ingestion_job(db, job, payload)
-                elif job_type == "meal_plan_generate":
-                    _process_meal_plan_job(db, job, payload)
-                else:
-                    logger.error("Unknown job type in envelope: %s", job_type)
-                    parse_job_service.mark_error(db, job, "unknown_job_type", f"Unknown job type: {job_type}")
+                try:
+                    if job_type == "ocr.completed":
+                        _process_ocr_completed(db, job, payload, parent_job_id)
+                    elif job_type == "recipe.import.url.requested":
+                        _process_url_job(db, job)
+                    elif job_type == "recipe.create.manual.requested":
+                        # Manual entry - not implemented yet
+                        parse_job_service.mark_error(db, job, "not_implemented", "Manual entry not yet implemented")
+                    elif job_type == "ingestion":
+                        _process_ingestion_job(db, job, payload)
+                    elif job_type == "meal_plan_generate":
+                        _process_meal_plan_job(db, job, payload)
+                    else:
+                        logger.error("Unknown job type in envelope: %s", job_type)
+                        parse_job_service.mark_error(db, job, "unknown_job_type", f"Unknown job type: {job_type}")
+                except Exception as handler_exc:
+                    logger.exception("Handler failed for job %s (type %s): %s", job_id, job_type, handler_exc)
+                    try:
+                        db.rollback()
+                        parse_job_service.mark_error(db, job, "handler_error", str(handler_exc))
+                    except Exception as mark_exc:
+                        logger.exception("Failed to mark job %s as error after handler failure: %s", job_id, mark_exc)
+            finally:
+                if db:
+                    try:
+                        db.close()
+                    except Exception as close_exc:
+                        logger.exception("Error closing database session for job %s: %s", job_id, close_exc)
         else:
             # Legacy format (backwards compatibility)
-            job_id = envelope["job_id"]
-            job_type = envelope["job_type"]
+            job_id = envelope.get("job_id")
+            job_type = envelope.get("job_type")
             job_data = envelope.get("data", {})
             
             logger.info("Processing job %s (%s) from legacy format", job_id, job_type)
             
-            with SessionLocal() as db:
+            db = SessionLocal()
+            try:
+                if not job_id:
+                    logger.error("Legacy job missing job_id in envelope")
+                    return
+                
                 job = db.get(models.RecipeParseJob, job_id)
                 if not job:
                     logger.error("Job %s not found in database", job_id)
@@ -110,36 +139,64 @@ def process_job(payload_json: str) -> None:
                     logger.info("Job %s was canceled, skipping", job_id)
                     return
                 
-                parse_job_service.mark_running(db, job)
+                try:
+                    parse_job_service.mark_running(db, job)
+                except Exception as exc:
+                    logger.exception("Failed to mark job %s as running: %s", job_id, exc)
+                    db.rollback()
                 
                 # Route to legacy handlers
-                if job_type == "image":
-                    # Image jobs should now come via OCR completion, but handle legacy for migration
-                    logger.warning("Legacy image job detected - should use OCR queue")
-                    _process_image_job(db, job)
-                elif job_type == "ingestion":
-                    _process_ingestion_job(db, job, job_data)
-                elif job_type == "meal_plan_generate":
-                    _process_meal_plan_job(db, job, job_data)
-                elif job_type == "url":
-                    _process_url_job(db, job)
-                else:
-                    logger.error("Unknown job type: %s", job_type)
-                    parse_job_service.mark_error(db, job, "unknown_job_type", f"Unknown job type: {job_type}")
+                try:
+                    if job_type == "image":
+                        # Image jobs should now come via OCR completion, but handle legacy for migration
+                        logger.warning("Legacy image job detected - should use OCR queue")
+                        _process_image_job(db, job)
+                    elif job_type == "ingestion":
+                        _process_ingestion_job(db, job, job_data)
+                    elif job_type == "meal_plan_generate":
+                        _process_meal_plan_job(db, job, job_data)
+                    elif job_type == "url":
+                        _process_url_job(db, job)
+                    else:
+                        logger.error("Unknown job type: %s", job_type)
+                        parse_job_service.mark_error(db, job, "unknown_job_type", f"Unknown job type: {job_type}")
+                except Exception as handler_exc:
+                    logger.exception("Handler failed for job %s (type %s): %s", job_id, job_type, handler_exc)
+                    try:
+                        db.rollback()
+                        parse_job_service.mark_error(db, job, "handler_error", str(handler_exc))
+                    except Exception as mark_exc:
+                        logger.exception("Failed to mark job %s as error after handler failure: %s", job_id, mark_exc)
+            finally:
+                if db:
+                    try:
+                        db.close()
+                    except Exception as close_exc:
+                        logger.exception("Error closing database session for job %s: %s", job_id, close_exc)
     
+    except json.JSONDecodeError as exc:
+        logger.exception("Failed to parse job payload JSON: %s", exc)
+        # Can't recover from JSON decode errors - log and continue
     except Exception as exc:
-        logger.exception("Failed to process job: %s", exc)
+        logger.exception("Unexpected error processing job: %s", exc)
         # Try to mark job as error if we have a job_id
-        try:
-            payload = json.loads(payload_json)
-            job_id = payload.get("job_id")
-            if job_id:
-                with SessionLocal() as db:
+        if job_id:
+            try:
+                db = SessionLocal()
+                try:
                     job = db.get(models.RecipeParseJob, job_id)
                     if job:
                         parse_job_service.mark_error(db, job, "worker_error", str(exc))
-        except Exception:
-            logger.exception("Failed to mark job as error")
+                except Exception as mark_exc:
+                    logger.exception("Failed to mark job %s as error: %s", job_id, mark_exc)
+                finally:
+                    if db:
+                        try:
+                            db.close()
+                        except Exception:
+                            pass
+            except Exception as db_exc:
+                logger.exception("Failed to create database session to mark job %s as error: %s", job_id, db_exc)
 
 
 def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], parent_job_id: Optional[str]) -> None:
@@ -150,6 +207,8 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
     extraction pipeline (quality check, text structuring, draft creation).
     
     The payload contains a `results[]` array with one entry per image, aligned by index.
+    
+    All exceptions are caught and handled gracefully to prevent worker crashes.
     """
     try:
         logger.info("Processing OCR completion for job %s", job.id)
@@ -269,8 +328,14 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
         logger.info("Found ingestion %s for job %s", ingestion_id, job.id)
         
         ingestion.status = "RUNNING"
-        db.commit()
-        db.refresh(ingestion)
+        try:
+            db.commit()
+            db.refresh(ingestion)
+        except Exception as commit_exc:
+            logger.exception("Failed to commit ingestion status update for job %s: %s", job.id, commit_exc)
+            db.rollback()
+            parse_job_service.mark_error(db, job, "database_error", f"Failed to update ingestion status: {commit_exc}")
+            return
         
         # Quality check on combined text
         logger.info("Running quality check for job %s: text_length=%d, mean_confidence=%s", 
@@ -403,31 +468,50 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
                     }],
                     "selected_tier": 1,
                 }
-                db.commit()
-                db.refresh(ingestion)
+                try:
+                    db.commit()
+                    db.refresh(ingestion)
+                except Exception as commit_exc:
+                    logger.exception("Failed to commit ingestion success for job %s: %s", job.id, commit_exc)
+                    db.rollback()
+                    parse_job_service.mark_error(db, job, "database_error", f"Failed to save ingestion result: {commit_exc}")
+                    return
                 
-                # Publish completion message
-                mailbox_service.publish(
-                    db,
-                    ingestion.user_id,
-                    "recipe_image_ingestion_completed",
-                    {
-                        "ingestion_id": ingestion.id,
-                        "recipe_draft": draft.model_dump(),
-                        "pipeline": ingestion.pipeline_json,
-                    },
-                )
+                # Publish completion message (non-critical - log but don't fail job if this fails)
+                try:
+                    mailbox_service.publish(
+                        db,
+                        ingestion.user_id,
+                        "recipe_image_ingestion_completed",
+                        {
+                            "ingestion_id": ingestion.id,
+                            "recipe_draft": draft.model_dump(),
+                            "pipeline": ingestion.pipeline_json,
+                        },
+                    )
+                except Exception as publish_exc:
+                    logger.warning("Failed to publish completion message for job %s: %s", job.id, publish_exc)
+                    # Continue - job completion is more important than messaging
                 
                 # Mark job as complete
-                # Store the draft in result_json (ParseResult expects ParsedRecipe, but we have RecipeDraft)
-                job.result_json = {
-                    "recipe_draft": draft.model_dump(),
-                    "pipeline": ingestion.pipeline_json,
-                }
-                job.status = parse_job_service.RecipeParseJobStatus.COMPLETE.value
-                db.commit()
-                db.refresh(job)
-                logger.info("OCR completion processed successfully for job %s", job.id)
+                try:
+                    # Store the draft in result_json (ParseResult expects ParsedRecipe, but we have RecipeDraft)
+                    job.result_json = {
+                        "recipe_draft": draft.model_dump(),
+                        "pipeline": ingestion.pipeline_json,
+                    }
+                    job.status = parse_job_service.RecipeParseJobStatus.COMPLETE.value
+                    db.commit()
+                    db.refresh(job)
+                    logger.info("OCR completion processed successfully for job %s", job.id)
+                except Exception as commit_exc:
+                    logger.exception("Failed to mark job %s as complete: %s", job.id, commit_exc)
+                    db.rollback()
+                    # Try one more time with just error marking
+                    try:
+                        parse_job_service.mark_error(db, job, "database_error", f"Failed to save job completion: {commit_exc}")
+                    except Exception:
+                        logger.exception("Failed to mark job %s as error after completion failure", job.id)
             else:
                 parse_job_service.mark_error(db, job, "text_structuring_failed", "LLM failed to extract recipe from OCR text")
                 ingestion.status = "FAILED"
@@ -455,9 +539,15 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
     except Exception as exc:
         logger.exception("OCR completion processing failed for job %s: %s", job.id, exc)
         try:
+            db.rollback()  # Rollback any partial changes
             parse_job_service.mark_error(db, job, "ocr_completion_error", str(exc))
         except Exception as exc2:
             logger.exception("Failed to mark job %s as error: %s", job.id, exc2)
+            # Last resort - try to rollback
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
 
 def _process_image_job(db: Session, job: Any) -> None:
@@ -466,6 +556,7 @@ def _process_image_job(db: Session, job: Any) -> None:
     
     Image jobs should now come via OCR completion events. This handler is kept
     for backwards compatibility during migration.
+    All exceptions are caught and handled gracefully.
     """
     try:
         logger.warning("Legacy image job handler called for job %s - should use OCR queue", job.id)
@@ -475,27 +566,43 @@ def _process_image_job(db: Session, job: Any) -> None:
     except Exception as exc:
         logger.exception("Image job %s crashed with exception: %s", job.id, exc)
         try:
+            db.rollback()
             parse_job_service.mark_error(db, job, "worker_error", str(exc))
         except Exception as exc2:
             logger.exception("Failed to mark job %s as error after exception: %s", job.id, exc2)
+            # Last resort rollback
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
 
 def _process_ingestion_job(db: Session, job: Any, job_data: Dict[str, Any]) -> None:
-    """Process an ingestion job."""
+    """Process an ingestion job. All exceptions are caught and handled gracefully."""
     settings = get_settings()
     max_retries = settings.llm_recipe_queue_max_retries
     
     try:
         input_payload = IngestionInput.model_validate(job_data)
     except Exception as exc:
-        parse_job_service.mark_error(db, job, "invalid_payload", str(exc))
+        logger.exception("Invalid payload for job %s: %s", job.id, exc)
+        try:
+            parse_job_service.mark_error(db, job, "invalid_payload", str(exc))
+        except Exception as mark_exc:
+            logger.exception("Failed to mark job %s as error for invalid payload: %s", job.id, mark_exc)
+            db.rollback()
         return
     
     try:
         result = asyncio.run(parse_recipe_ingestion(input_payload))
         if result.success:
-            parse_job_service.mark_complete(db, job, result)
-            logger.info("Job %s complete", job.id)
+            try:
+                parse_job_service.mark_complete(db, job, result)
+                logger.info("Job %s complete", job.id)
+            except Exception as commit_exc:
+                logger.exception("Failed to mark job %s as complete: %s", job.id, commit_exc)
+                db.rollback()
+                parse_job_service.mark_error(db, job, "database_error", f"Failed to save result: {commit_exc}")
         else:
             # Don't retry encoding errors - they won't fix themselves
             is_encoding_error = (
@@ -510,80 +617,139 @@ def _process_ingestion_job(db: Session, job: Any, job_data: Dict[str, Any]) -> N
             )
             if should_retry:
                 logger.warning("Job %s failed with %s; retrying (attempt %s/%s)", job.id, result.error_code, job.attempts, max_retries)
-                job.status = parse_job_service.RecipeParseJobStatus.PENDING.value
-                job.error_code = result.error_code
-                job.error_message = result.error_message
-                db.commit()
-                db.refresh(job)
-                # Re-enqueue to Redis
-                from jarvis_recipes.app.services.queue_service import enqueue_job
-                enqueue_job(job.job_type, job.id, job.job_data or {})
+                try:
+                    job.status = parse_job_service.RecipeParseJobStatus.PENDING.value
+                    job.error_code = result.error_code
+                    job.error_message = result.error_message
+                    db.commit()
+                    db.refresh(job)
+                    # Re-enqueue to Redis
+                    from jarvis_recipes.app.services.queue_service import enqueue_job
+                    enqueue_job(job.job_type, job.id, job.job_data or {})
+                except Exception as retry_exc:
+                    logger.exception("Failed to retry job %s: %s", job.id, retry_exc)
+                    db.rollback()
+                    parse_job_service.mark_error(db, job, result.error_code or "parse_failed", result.error_message or "Parse failed")
             else:
                 # If result has next_action, store the full result so client can see the suggestion
                 if result.next_action:
-                    parse_job_service.mark_complete(db, job, result)
-                    job.status = parse_job_service.RecipeParseJobStatus.ERROR.value
-                    job.error_code = result.error_code or "parse_failed"
-                    job.error_message = result.error_message or "Parse failed"
-                    db.commit()
-                    logger.warning("Job %s failed but stored next_action=%s: %s", job.id, result.next_action, result.error_message)
+                    try:
+                        parse_job_service.mark_complete(db, job, result)
+                        job.status = parse_job_service.RecipeParseJobStatus.ERROR.value
+                        job.error_code = result.error_code or "parse_failed"
+                        job.error_message = result.error_message or "Parse failed"
+                        db.commit()
+                        logger.warning("Job %s failed but stored next_action=%s: %s", job.id, result.next_action, result.error_message)
+                    except Exception as commit_exc:
+                        logger.exception("Failed to store next_action for job %s: %s", job.id, commit_exc)
+                        db.rollback()
+                        parse_job_service.mark_error(db, job, result.error_code or "parse_failed", result.error_message or "Parse failed")
                 else:
-                    parse_job_service.mark_error(db, job, result.error_code or "parse_failed", result.error_message or "Parse failed")
-                    logger.warning("Job %s failed: %s", job.id, result.error_message)
+                    try:
+                        parse_job_service.mark_error(db, job, result.error_code or "parse_failed", result.error_message or "Parse failed")
+                        logger.warning("Job %s failed: %s", job.id, result.error_message)
+                    except Exception as error_exc:
+                        logger.exception("Failed to mark job %s as error: %s", job.id, error_exc)
+                        db.rollback()
     except Exception as exc:
-        logger.exception("Job %s crashed", job.id)
-        parse_job_service.mark_error(db, job, "worker_error", str(exc))
+        logger.exception("Job %s crashed: %s", job.id, exc)
+        try:
+            db.rollback()
+            parse_job_service.mark_error(db, job, "worker_error", str(exc))
+        except Exception as mark_exc:
+            logger.exception("Failed to mark job %s as error after crash: %s", job.id, mark_exc)
 
 
 def _process_meal_plan_job(db: Session, job: Any, job_data: Dict[str, Any]) -> None:
-    """Process a meal plan generation job."""
+    """Process a meal plan generation job. All exceptions are caught and handled gracefully."""
     try:
         request_id = job_data.get("request_id") or str(uuid.uuid4())
         payload = job_data.get("payload") or {}
         req = MealPlanGenerateRequest.model_validate(payload)
     except Exception as exc:
-        parse_job_service.mark_error(db, job, "invalid_payload", str(exc))
+        logger.exception("Invalid payload for meal plan job %s: %s", job.id, exc)
+        try:
+            parse_job_service.mark_error(db, job, "invalid_payload", str(exc))
+        except Exception as mark_exc:
+            logger.exception("Failed to mark job %s as error for invalid payload: %s", job.id, mark_exc)
+            db.rollback()
         return
     
     try:
         result, slot_failures = meal_plan_service.generate_meal_plan(db, job.user_id, req, request_id)
-        meal_plan_service.publish_completed(db, job.user_id, request_id, result, slot_failures)
-        job.result_json = {"result": result.model_dump(mode="json"), "slot_failures_count": slot_failures}
-        job.status = parse_job_service.RecipeParseJobStatus.COMPLETE.value
-        db.commit()
-        db.refresh(job)
+        try:
+            meal_plan_service.publish_completed(db, job.user_id, request_id, result, slot_failures)
+        except Exception as publish_exc:
+            logger.warning("Failed to publish meal plan completion for job %s: %s", job.id, publish_exc)
+            # Continue - job completion is more important than messaging
+        
+        try:
+            job.result_json = {"result": result.model_dump(mode="json"), "slot_failures_count": slot_failures}
+            job.status = parse_job_service.RecipeParseJobStatus.COMPLETE.value
+            db.commit()
+            db.refresh(job)
+        except Exception as commit_exc:
+            logger.exception("Failed to mark meal plan job %s as complete: %s", job.id, commit_exc)
+            db.rollback()
+            parse_job_service.mark_error(db, job, "database_error", f"Failed to save result: {commit_exc}")
     except Exception as exc:
-        request_id = job_data.get("request_id") or str(uuid.uuid4())
-        meal_plan_service.publish_failed(db, job.user_id, request_id, "generation_failed", str(exc))
-        parse_job_service.mark_error(db, job, "generation_failed", str(exc))
+        logger.exception("Meal plan job %s crashed: %s", job.id, exc)
+        try:
+            db.rollback()
+            request_id = job_data.get("request_id") or str(uuid.uuid4())
+            try:
+                meal_plan_service.publish_failed(db, job.user_id, request_id, "generation_failed", str(exc))
+            except Exception as publish_exc:
+                logger.warning("Failed to publish meal plan failure for job %s: %s", job.id, publish_exc)
+            parse_job_service.mark_error(db, job, "generation_failed", str(exc))
+        except Exception as mark_exc:
+            logger.exception("Failed to mark meal plan job %s as error after crash: %s", job.id, mark_exc)
 
 
 def _process_url_job(db: Session, job: Any) -> None:
-    """Process a URL parsing job."""
+    """Process a URL parsing job. All exceptions are caught and handled gracefully."""
     settings = get_settings()
     max_retries = settings.llm_recipe_queue_max_retries
     
     try:
         result = asyncio.run(url_recipe_parser.parse_recipe_from_url(job.url, job.use_llm_fallback))
         if result.success:
-            parse_job_service.mark_complete(db, job, result)
-            logger.info("Job %s complete", job.id)
+            try:
+                parse_job_service.mark_complete(db, job, result)
+                logger.info("Job %s complete", job.id)
+            except Exception as commit_exc:
+                logger.exception("Failed to mark job %s as complete: %s", job.id, commit_exc)
+                db.rollback()
+                parse_job_service.mark_error(db, job, "database_error", f"Failed to save result: {commit_exc}")
         else:
             should_retry = job.attempts < max_retries and (result.error_code in {"llm_timeout", "llm_failed", "fetch_failed"})
             if should_retry:
                 logger.warning("Job %s failed with %s; retrying (attempt %s/%s)", job.id, result.error_code, job.attempts, max_retries)
-                job.status = parse_job_service.RecipeParseJobStatus.PENDING.value
-                job.error_code = result.error_code
-                job.error_message = result.error_message
-                db.commit()
-                db.refresh(job)
-                # Re-enqueue to Redis
-                from jarvis_recipes.app.services.queue_service import enqueue_job
-                enqueue_job(job.job_type, job.id, job.job_data or {})
+                try:
+                    job.status = parse_job_service.RecipeParseJobStatus.PENDING.value
+                    job.error_code = result.error_code
+                    job.error_message = result.error_message
+                    db.commit()
+                    db.refresh(job)
+                    # Re-enqueue to Redis
+                    from jarvis_recipes.app.services.queue_service import enqueue_job
+                    enqueue_job(job.job_type, job.id, job.job_data or {})
+                except Exception as retry_exc:
+                    logger.exception("Failed to retry job %s: %s", job.id, retry_exc)
+                    db.rollback()
+                    parse_job_service.mark_error(db, job, result.error_code or "parse_failed", result.error_message or "Parse failed")
             else:
-                parse_job_service.mark_error(db, job, result.error_code or "parse_failed", result.error_message or "Parse failed")
-                logger.warning("Job %s failed: %s", job.id, result.error_message)
+                try:
+                    parse_job_service.mark_error(db, job, result.error_code or "parse_failed", result.error_message or "Parse failed")
+                    logger.warning("Job %s failed: %s", job.id, result.error_message)
+                except Exception as error_exc:
+                    logger.exception("Failed to mark job %s as error: %s", job.id, error_exc)
+                    db.rollback()
     except Exception as exc:
-        logger.exception("Job %s crashed", job.id)
-        parse_job_service.mark_error(db, job, "worker_error", str(exc))
+        logger.exception("Job %s crashed: %s", job.id, exc)
+        try:
+            db.rollback()
+            parse_job_service.mark_error(db, job, "worker_error", str(exc))
+        except Exception as mark_exc:
+            logger.exception("Failed to mark job %s as error after crash: %s", job.id, mark_exc)
 

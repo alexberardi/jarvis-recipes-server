@@ -39,22 +39,44 @@ def setup_cleanup():
 
 
 def main():
-    """Start RQ worker."""
+    """Start RQ worker with graceful error handling."""
     settings = get_settings()
     logger.info("Starting RQ worker for queues: %s", ", ".join(QUEUE_NAMES))
     logger.info("Redis connection: %s:%s", settings.redis_host, settings.redis_port)
     
-    # Get Redis connection
-    redis_conn = get_redis_connection()
-    push_connection(redis_conn)
+    max_restarts = 10
+    restart_count = 0
     
-    # Get queues
-    from jarvis_recipes.app.services.queue_service import get_queue
-    queues = [get_queue(name) for name in QUEUE_NAMES]
-    
-    # Create and start worker
-    worker = Worker(queues, connection=redis_conn)
-    worker.work(with_scheduler=True)  # with_scheduler enables job cleanup
+    while restart_count < max_restarts:
+        try:
+            # Get Redis connection
+            redis_conn = get_redis_connection()
+            push_connection(redis_conn)
+            
+            # Get queues
+            from jarvis_recipes.app.services.queue_service import get_queue
+            queues = [get_queue(name) for name in QUEUE_NAMES]
+            
+            # Create and start worker
+            worker = Worker(queues, connection=redis_conn)
+            logger.info("Worker started successfully")
+            worker.work(with_scheduler=True)  # with_scheduler enables job cleanup
+            # If worker.work() returns normally, exit gracefully
+            logger.info("Worker stopped normally")
+            break
+        except KeyboardInterrupt:
+            logger.info("Worker interrupted by user")
+            break
+        except Exception as exc:
+            restart_count += 1
+            logger.exception("Worker crashed (restart %d/%d): %s", restart_count, max_restarts, exc)
+            if restart_count >= max_restarts:
+                logger.error("Worker exceeded max restarts (%d), exiting", max_restarts)
+                raise
+            # Wait a bit before restarting
+            import time
+            time.sleep(5)
+            logger.info("Restarting worker...")
 
 
 if __name__ == "__main__":
