@@ -119,26 +119,40 @@ async def process_image_ingestion_job(db: Session, job: models.RecipeParseJob) -
         parse_job_service.mark_error(db, job, "invalid_ingestion", "Ingestion not found")
         return
     ingestion.status = "RUNNING"
-    db.commit()
-    db.refresh(ingestion)
+    try:
+        db.commit()
+        db.refresh(ingestion)
+    except Exception as commit_exc:
+        logger.exception("Failed to update ingestion status to RUNNING for job %s: %s", job.id, commit_exc)
+        db.rollback()
+        parse_job_service.mark_error(db, job, "database_error", f"Failed to update ingestion status: {commit_exc}")
+        return
 
     try:
         image_bytes = await _load_images_from_s3(ingestion.image_s3_keys or [])
     except Exception as exc:  # noqa: BLE001
-        parse_job_service.mark_error(db, job, "invalid_images", "Unable to load images from storage")
-        ingestion.status = "FAILED"
-        db.commit()
-        db.refresh(ingestion)
-        mailbox_service.publish(
-            db,
-            ingestion.user_id,
-            "recipe_image_ingestion_failed",
-            {
-                "ingestion_id": ingestion.id,
-                "error_code": "invalid_images",
-                "message": "Unable to read uploaded images",
-            },
-        )
+        logger.exception("Failed to load images from S3 for job %s: %s", job.id, exc)
+        try:
+            db.rollback()
+            parse_job_service.mark_error(db, job, "invalid_images", "Unable to load images from storage")
+            ingestion.status = "FAILED"
+            db.commit()
+            db.refresh(ingestion)
+            try:
+                mailbox_service.publish(
+                    db,
+                    ingestion.user_id,
+                    "recipe_image_ingestion_failed",
+                    {
+                        "ingestion_id": ingestion.id,
+                        "error_code": "invalid_images",
+                        "message": "Unable to read uploaded images",
+                    },
+                )
+            except Exception as publish_exc:
+                logger.warning("Failed to publish failure message for job %s: %s", job.id, publish_exc)
+        except Exception as mark_exc:
+            logger.exception("Failed to mark job %s as error after image load failure: %s", job.id, mark_exc)
         return
 
     tier_max = payload.get("tier_max") or ingestion.tier_max or 3
@@ -175,11 +189,16 @@ async def process_image_ingestion_job(db: Session, job: models.RecipeParseJob) -
             logger.exception("Failed to mark job %s as complete: %s", job.id, exc)
             # Fall back to marking as error with the pipeline info
             try:
+                db.rollback()
                 job.result_json = {"pipeline": pipeline_json, "recipe_draft": final_draft.model_dump() if final_draft else None}
                 db.commit()
                 parse_job_service.mark_error(db, job, "mark_complete_failed", str(exc))
             except Exception as exc2:
                 logger.exception("Failed to mark job %s as error after mark_complete failed: %s", job.id, exc2)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
     else:
         # Store pipeline_json in result_json even on failure so UI can see what happened
         try:
@@ -208,10 +227,24 @@ async def process_image_ingestion_job(db: Session, job: models.RecipeParseJob) -
                 error_message = "Image ingestion failed"
             
             # Set result_json before marking error (mark_error doesn't touch result_json)
-            job.result_json = {"pipeline": pipeline_json, "recipe_draft": None}
-            db.commit()  # Commit result_json first
-            parse_job_service.mark_error(db, job, error_code, error_message)
-            logger.info("Marked job %s as error: %s - %s", job.id, error_code, error_message)
+            try:
+                db.rollback()  # Ensure clean state
+                job.result_json = {"pipeline": pipeline_json, "recipe_draft": None}
+                db.commit()  # Commit result_json first
+                parse_job_service.mark_error(db, job, error_code, error_message)
+                logger.info("Marked job %s as error: %s - %s", job.id, error_code, error_message)
+            except Exception as commit_exc:
+                logger.exception("Failed to commit error state for job %s: %s", job.id, commit_exc)
+                try:
+                    db.rollback()
+                    # Try one more time with just error marking
+                    parse_job_service.mark_error(db, job, error_code, error_message)
+                except Exception as final_exc:
+                    logger.exception("Final attempt to mark job %s as error failed: %s", job.id, final_exc)
         except Exception as exc:
             logger.exception("Failed to mark job %s as error: %s", job.id, exc)
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
