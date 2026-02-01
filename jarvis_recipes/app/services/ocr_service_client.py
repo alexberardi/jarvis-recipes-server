@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 
 import httpx
 
+from jarvis_recipes.app.core import service_config
 from jarvis_recipes.app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -53,8 +54,8 @@ async def call_ocr_service_batch(
         Tuple of (combined_text, mean_confidence, provider_used, metadata_list)
         Raises OCRServiceUnavailableError if service is unavailable
     """
-    settings = get_settings()
-    if not settings.jarvis_ocr_service_url:
+    ocr_url = service_config.get_ocr_url()
+    if not ocr_url:
         raise ValueError("JARVIS_OCR_SERVICE_URL not configured")
 
     if not image_bytes_list:
@@ -81,7 +82,7 @@ async def call_ocr_service_batch(
         },
     }
 
-    url = f"{settings.jarvis_ocr_service_url.rstrip('/')}/v1/ocr/batch"
+    url = f"{ocr_url.rstrip('/')}/v1/ocr/batch"
     headers = {
         "Content-Type": "application/json",
         **_get_auth_headers(),
