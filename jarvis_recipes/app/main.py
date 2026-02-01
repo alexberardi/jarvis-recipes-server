@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from fastapi import FastAPI
@@ -8,6 +9,9 @@ from starlette import status
 
 from jarvis_recipes.app.api.routes import api_router
 from jarvis_recipes.app.core.config import get_settings
+from jarvis_recipes.app.core import service_config
+
+logger = logging.getLogger(__name__)
 
 
 async def validation_exception_handler(request, exc: RequestValidationError):
@@ -34,6 +38,14 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(api_router)
     app.mount("/media", StaticFiles(directory=settings.media_root), name="media")
+
+    @app.on_event("startup")
+    async def startup_event() -> None:
+        if service_config.init():
+            logger.info("Service discovery initialized")
+        else:
+            logger.info("Using environment variables for service URLs")
+
     return app
 
 
