@@ -63,9 +63,8 @@ def test_extract_recipe_heuristic():
 async def test_extract_recipe_via_llm(monkeypatch):
     settings = url_recipe_parser.get_settings()
     settings.llm_base_url = "http://llm-proxy"
-    settings.llm_vision_model_name = "vision"
-    settings.llm_app_id = "app-id"
-    settings.llm_app_key = "app-key"
+    settings.jarvis_auth_app_id = "app-id"
+    settings.jarvis_auth_app_key = "app-key"
 
     class FakeResponse:
         status_code = 200
@@ -162,8 +161,8 @@ async def test_parse_recipe_from_url_heuristic(monkeypatch):
 async def test_parse_recipe_from_url_llm(monkeypatch):
     settings = url_recipe_parser.get_settings()
     settings.llm_base_url = "http://llm-proxy"
-    settings.llm_app_id = "app-id"
-    settings.llm_app_key = "app-key"
+    settings.jarvis_auth_app_id = "app-id"
+    settings.jarvis_auth_app_key = "app-key"
 
     async def fake_fetch(url: str):
         return "<html><body>No recipe</body></html>"
@@ -223,8 +222,8 @@ async def test_parse_recipe_from_url_llm(monkeypatch):
 async def test_parse_llm_json_with_noise(monkeypatch):
     settings = url_recipe_parser.get_settings()
     settings.llm_base_url = "http://llm-proxy"
-    settings.llm_app_id = "app-id"
-    settings.llm_app_key = "app-key"
+    settings.jarvis_auth_app_id = "app-id"
+    settings.jarvis_auth_app_key = "app-key"
 
     async def fake_fetch(url: str):
         return "<html><body>No recipe</body></html>"

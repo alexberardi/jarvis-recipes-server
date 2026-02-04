@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 from fastapi.exceptions import RequestValidationError
@@ -16,7 +17,7 @@ async def test_validation_handler_formats_errors():
     )
     response = await validation_exception_handler(None, exc)
     assert response.status_code == 422
-    body = response.json()
+    body = json.loads(response.body)
     assert body["error_code"] == "validation_error"
     assert body["message"] == "Invalid request payload."
     assert "job_id" in body and body["job_id"]
