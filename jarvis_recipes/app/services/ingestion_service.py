@@ -155,7 +155,6 @@ async def parse_recipe(input: IngestionInput) -> ParseResult:
             logger.info("First JSON-LD block preview (first 500 chars): %s", block_preview)
             # Try to parse and see what @type it has
             try:
-                import json
                 data = json.loads(first_block)
                 if isinstance(data, dict):
                     obj_type = data.get("@type")
@@ -165,7 +164,7 @@ async def parse_recipe(input: IngestionInput) -> ParseResult:
                     if isinstance(first_item, dict):
                         obj_type = first_item.get("@type")
                         logger.info("First JSON-LD block is a list, first item @type: %s", obj_type)
-            except Exception as exc:
+            except json.JSONDecodeError as exc:
                 logger.warning("Could not parse first JSON-LD block to check @type: %s", exc)
         
         if len(input.jsonld_blocks) > MAX_JSONLD_BLOCKS:

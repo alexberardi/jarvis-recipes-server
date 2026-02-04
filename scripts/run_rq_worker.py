@@ -74,7 +74,6 @@ def main():
                 logger.error("Worker exceeded max restarts (%d), exiting", max_restarts)
                 raise
             # Wait a bit before restarting
-            import time
             time.sleep(5)
             logger.info("Restarting worker...")
 

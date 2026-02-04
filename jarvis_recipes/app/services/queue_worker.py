@@ -17,13 +17,13 @@ from jarvis_recipes.app.db.session import SessionLocal
 from jarvis_recipes.app.schemas.ingestion_input import IngestionInput
 from jarvis_recipes.app.schemas.meal_plan import MealPlanGenerateRequest
 from jarvis_recipes.app.db import models
-from jarvis_recipes.app.services import meal_plan_service, parse_job_service, url_recipe_parser
+from jarvis_recipes.app.services import mailbox_service, meal_plan_service, parse_job_service, url_recipe_parser
 from jarvis_recipes.app.services.image_ingest_worker import process_image_ingestion_job
 from jarvis_recipes.app.services.ingestion_service import parse_recipe as parse_recipe_ingestion
 from jarvis_recipes.app.services.image_ingest_pipeline import run_ingestion_pipeline
 from jarvis_recipes.app.services import ocr_quality
 from jarvis_recipes.app.services.llm_client import call_text_structuring, clean_and_validate_draft
-from jarvis_recipes.app.core.config import get_settings
+from jarvis_recipes.app.services.queue_service import enqueue_job
 
 logger = logging.getLogger(__name__)
 
@@ -449,8 +449,6 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
                     return
                 
                 # Success - create recipe draft
-                from jarvis_recipes.app.services import mailbox_service
-                
                 ingestion.status = "SUCCEEDED"
                 ingestion.pipeline_json = {
                     "attempts": [{
@@ -510,7 +508,7 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
                     # Try one more time with just error marking
                     try:
                         parse_job_service.mark_error(db, job, "database_error", f"Failed to save job completion: {commit_exc}")
-                    except Exception:
+                    except (OSError, RuntimeError):
                         logger.exception("Failed to mark job %s as error after completion failure", job.id)
             else:
                 parse_job_service.mark_error(db, job, "text_structuring_failed", "LLM failed to extract recipe from OCR text")
@@ -546,7 +544,7 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
             # Last resort - try to rollback
             try:
                 db.rollback()
-            except Exception:
+            except (OSError, RuntimeError):
                 pass
 
 
@@ -568,12 +566,12 @@ def _process_image_job(db: Session, job: Any) -> None:
         try:
             db.rollback()
             parse_job_service.mark_error(db, job, "worker_error", str(exc))
-        except Exception as exc2:
+        except (OSError, RuntimeError) as exc2:
             logger.exception("Failed to mark job %s as error after exception: %s", job.id, exc2)
             # Last resort rollback
             try:
                 db.rollback()
-            except Exception:
+            except (OSError, RuntimeError):
                 pass
 
 
@@ -624,7 +622,6 @@ def _process_ingestion_job(db: Session, job: Any, job_data: Dict[str, Any]) -> N
                     db.commit()
                     db.refresh(job)
                     # Re-enqueue to Redis
-                    from jarvis_recipes.app.services.queue_service import enqueue_job
                     enqueue_job(job.job_type, job.id, job.job_data or {})
                 except Exception as retry_exc:
                     logger.exception("Failed to retry job %s: %s", job.id, retry_exc)
@@ -732,7 +729,6 @@ def _process_url_job(db: Session, job: Any) -> None:
                     db.commit()
                     db.refresh(job)
                     # Re-enqueue to Redis
-                    from jarvis_recipes.app.services.queue_service import enqueue_job
                     enqueue_job(job.job_type, job.id, job.job_data or {})
                 except Exception as retry_exc:
                     logger.exception("Failed to retry job %s: %s", job.id, retry_exc)

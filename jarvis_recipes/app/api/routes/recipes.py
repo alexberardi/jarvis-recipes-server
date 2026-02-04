@@ -323,7 +323,7 @@ def list_parse_jobs(
         if src:
             try:
                 source_host = urlparse(src).hostname
-            except Exception:
+            except ValueError:
                 source_host = None
         return {"title": title, "source_host": source_host}
 

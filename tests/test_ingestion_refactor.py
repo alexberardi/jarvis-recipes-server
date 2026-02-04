@@ -54,8 +54,6 @@ async def test_blocked_url_sets_next_action(monkeypatch):
         raise HTTPStatusError("forbidden", request=req, response=resp)
 
     monkeypatch.setattr(url_recipe_parser, "fetch_html", fake_fetch)
-    from jarvis_recipes.app.schemas.ingestion_input import IngestionInput
-    from jarvis_recipes.app.services.ingestion_service import parse_recipe
 
     input_obj = IngestionInput(source_type="server_fetch", source_url="https://blocked.test")
     result = await parse_recipe(input_obj)

@@ -52,7 +52,7 @@ def init() -> bool:
     except ImportError:
         logger.warning("jarvis-config-client not installed - using env vars")
         return False
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.error("Failed to initialize service discovery: %s", e)
         return False
 
@@ -71,7 +71,7 @@ def _get_url(service_name: str) -> str:
             url = get_service_url(service_name)
             if url:
                 return url
-        except Exception:
+        except (ImportError, OSError, RuntimeError, KeyError):
             pass
 
     # Fall back to env var

@@ -96,7 +96,7 @@ async def preflight_validate_url(url: str, timeout: float = 3.0) -> PreflightRes
     if settings.scraper_cookies:
         try:
             cookies = json.loads(settings.scraper_cookies)
-        except Exception:
+        except json.JSONDecodeError:
             cookies = {}
 
     async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
@@ -788,7 +788,7 @@ async def fetch_html(url: str) -> str:
                         except (UnicodeDecodeError, LookupError):
                             # Keep the UTF-8 with replacement chars version
                             pass
-            except Exception:
+            except (UnicodeDecodeError, LookupError):
                 # Last resort: use response.text which should handle it
                 text = response.text
         
@@ -838,7 +838,7 @@ async def fetch_html(url: str) -> str:
                 has_html_tags = bool(re.search(r'<[a-z]+[^>]*>', text_fallback[:2000], re.I))
                 if has_html_tags:
                     return text_fallback
-        except Exception:
+        except (UnicodeDecodeError, AttributeError):
             pass
         raise ValueError(f"HTML content encoding error: {exc}")
 
@@ -1330,7 +1330,7 @@ async def extract_recipe_via_llm(html: str, url: str, metadata: Optional[dict] =
         if repaired:
             try:
                 parsed_json = json.loads(repaired)
-            except Exception:
+            except json.JSONDecodeError:
                 parsed_json = None
         if parsed_json is None:
             schema_hint = (
@@ -1344,7 +1344,7 @@ async def extract_recipe_via_llm(html: str, url: str, metadata: Optional[dict] =
             if repaired_llm:
                 try:
                     parsed_json = json.loads(repaired_llm)
-                except Exception:
+                except json.JSONDecodeError:
                     parsed_json = None
         if parsed_json is None:
             raise ValueError("LLM response was not valid JSON after repair attempts")
