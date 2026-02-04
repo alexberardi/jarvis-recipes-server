@@ -127,10 +127,8 @@ def create_job(
                 **(job_data or {}),
             }
             queue_service.enqueue_job(job_type, job.id, queue_data)
-        except Exception as exc:
+        except (OSError, RuntimeError) as exc:
             # Log error but don't fail job creation - job is in DB and can be processed later
-            import logging
-            logger = logging.getLogger(__name__)
             logger.warning("Failed to enqueue job %s to Redis: %s", job.id, exc)
     
     return job

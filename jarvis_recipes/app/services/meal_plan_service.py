@@ -1,10 +1,13 @@
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from jarvis_recipes.app.db import models
 from jarvis_recipes.app.schemas.meal_plan import (
@@ -256,8 +259,6 @@ def generate_meal_plan(
             )
             
             # Debug logging
-            import logging
-            logger = logging.getLogger(__name__)
             logger.info(
                 f"Slot {slot_counter} ({day.date} {meal_key}): "
                 f"tags={slot.tags}, found {len(candidates)} candidates, "

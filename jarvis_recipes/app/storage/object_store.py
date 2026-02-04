@@ -11,6 +11,7 @@ from typing import Optional
 
 import boto3
 from botocore.client import BaseClient
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from jarvis_recipes.app.core.config import get_settings
@@ -36,7 +37,6 @@ def _get_s3_client() -> BaseClient:
     config_kwargs = {}
     if settings.s3_force_path_style:
         # Force path-style addressing (required for MinIO)
-        from botocore.config import Config
         config_kwargs["config"] = Config(
             signature_version="s3v4",
             s3={"addressing_style": "path"},

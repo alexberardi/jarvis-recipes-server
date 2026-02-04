@@ -26,7 +26,7 @@ def run_cleanup():
             cleaned, abandoned_jobs = meal_plan_service.cleanup_expired_stage_recipes(db, cutoff_hours=72, mark_jobs=True)
             if cleaned:
                 logger.info("Deleted %s expired stage recipes (abandoned %s jobs)", cleaned, abandoned_jobs)
-        except Exception:
+        except (OSError, RuntimeError):
             logger.exception("Cleanup failed")
 
 

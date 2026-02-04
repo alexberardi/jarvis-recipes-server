@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 
@@ -13,7 +13,7 @@ def parse_quantity_display(raw: Optional[str]) -> Optional[Decimal]:
     try:
         if "/" not in value and " " not in value:
             return Decimal(value)
-    except Exception:
+    except InvalidOperation:
         pass
 
     # Fractions like "1/2" or "1 1/2"
@@ -34,7 +34,7 @@ def parse_quantity_display(raw: Optional[str]) -> Optional[Decimal]:
             if denom == 0:
                 return None
             return num / denom
-    except Exception:
+    except (InvalidOperation, ValueError):
         return None
 
     return None
