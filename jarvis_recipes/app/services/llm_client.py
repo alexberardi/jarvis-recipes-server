@@ -141,12 +141,12 @@ def _coerce_recipe_draft(obj: Any, source_type: str = "image") -> RecipeDraft:
             if val is not None:
                 try:
                     qty = str(val)
-                except Exception:
+                except (TypeError, ValueError):
                     qty = None
         elif qty is not None and not isinstance(qty, str):
             try:
                 qty = str(qty)
-            except Exception:
+            except (TypeError, ValueError):
                 qty = None
         name_val = ing.get("name") or ing.get("label") or ""
         ingredients.append(
@@ -185,7 +185,7 @@ def _coerce_recipe_draft(obj: Any, source_type: str = "image") -> RecipeDraft:
     if total_time is None and prep_time is not None and cook_time is not None:
         try:
             total_time = float(prep_time) + float(cook_time)
-        except Exception:
+        except (TypeError, ValueError):
             total_time = 0
 
     # Normalize ingredients: extract qty/unit from quantity field or name if needed
@@ -298,7 +298,7 @@ def _try_local_json_repair(raw: str) -> Optional[str]:
         try:
             json.loads(cleaned)
             return cleaned
-        except Exception:
+        except json.JSONDecodeError:
             pass
     start = cleaned.find("{")
     end = cleaned.rfind("}")
@@ -307,7 +307,7 @@ def _try_local_json_repair(raw: str) -> Optional[str]:
         try:
             json.loads(snippet)
             return snippet
-        except Exception:
+        except json.JSONDecodeError:
             return None
     return None
 
@@ -363,7 +363,7 @@ async def _repair_json_via_full_llm(broken_json: str, schema_hint: str, timeout_
     try:
         json.loads(repaired)
         return repaired
-    except Exception:
+    except json.JSONDecodeError:
         return None
 
 
@@ -382,12 +382,12 @@ async def _parse_with_repair(raw_content: str, source_type: str) -> RecipeDraft:
     raw_content = _strip_invalid_control_chars(raw_content)
     try:
         return _coerce_recipe_draft(raw_content, source_type=source_type)
-    except Exception:
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError):
         repaired = _try_local_json_repair(raw_content)
         if repaired:
             try:
                 return _coerce_recipe_draft(repaired, source_type=source_type)
-            except Exception:
+            except (json.JSONDecodeError, ValueError, KeyError, TypeError):
                 pass
         schema_hint = (
             '{ "title": string, "description": string|null, "ingredients": '

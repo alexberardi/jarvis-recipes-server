@@ -19,7 +19,7 @@ try:  # pragma: no cover
     import pillow_heif
 
     pillow_heif.register_heif_opener()  # type: ignore[attr-defined]
-except Exception:
+except ImportError:
     pass
 
 router = APIRouter(tags=["recipes"])

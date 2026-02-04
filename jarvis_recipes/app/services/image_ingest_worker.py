@@ -1,12 +1,11 @@
 import asyncio
+import json
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
 from jarvis_recipes.app.db import models
-import json
-from typing import Any, Dict, List, Optional, Tuple
 
 from jarvis_recipes.app.core.config import get_settings
 from jarvis_recipes.app.db import models
@@ -197,7 +196,7 @@ async def process_image_ingestion_job(db: Session, job: models.RecipeParseJob) -
                 logger.exception("Failed to mark job %s as error after mark_complete failed: %s", job.id, exc2)
                 try:
                     db.rollback()
-                except Exception:
+                except (OSError, RuntimeError):
                     pass
     else:
         # Store pipeline_json in result_json even on failure so UI can see what happened
@@ -245,6 +244,6 @@ async def process_image_ingestion_job(db: Session, job: models.RecipeParseJob) -
             logger.exception("Failed to mark job %s as error: %s", job.id, exc)
             try:
                 db.rollback()
-            except Exception:
+            except (OSError, RuntimeError):
                 pass
 
