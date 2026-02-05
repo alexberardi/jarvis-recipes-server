@@ -38,7 +38,9 @@ from jarvis_recipes.app.services.url_parsing.extractors.schema_org import (
     extract_recipe_from_schema_org,
 )
 from jarvis_recipes.app.services.url_parsing.extractors.heuristic import (
+    clean_soup_for_content,
     extract_recipe_heuristic,
+    find_main_node,
 )
 from jarvis_recipes.app.services.url_parsing.extractors.llm import (
     extract_recipe_via_llm,
@@ -60,8 +62,12 @@ __all__ = [
     "fetch_html",
     # Extractors
     "extract_recipe_from_schema_org",
+    "extract_recipe_from_microdata",
     "extract_recipe_heuristic",
     "extract_recipe_via_llm",
+    # HTML utilities (used by ingestion_service)
+    "clean_soup_for_content",
+    "find_main_node",
     # Re-exports for backward compatibility / tests
     "get_settings",
     "httpx",
@@ -155,16 +161,14 @@ async def parse_recipe_from_url(url: str, use_llm_fallback: bool = True) -> Pars
             url,
             exc.response.status_code if exc.response else "unknown",
         )
+        is_blocked = exc.response and exc.response.status_code in (401, 403)
         return ParseResult(
             success=False,
             error_code="fetch_failed",
             error_message=f"status_{exc.response.status_code if exc.response else 'unknown'}",
-            warnings=warnings
-            + [
-                "blocked_by_site"
-                if exc.response and exc.response.status_code == 403
-                else "fetch_http_error"
-            ],
+            warnings=warnings + ["blocked_by_site" if is_blocked else "fetch_http_error"],
+            next_action="webview_extract" if is_blocked else None,
+            next_action_reason="blocked_by_site" if is_blocked else None,
         )
     except httpx.HTTPError as exc:
         logger.exception("Failed to fetch URL %s", url)
