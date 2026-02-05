@@ -5,11 +5,14 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from jarvis_settings_client import create_settings_router
 from starlette import status
 
+from jarvis_recipes.app.api.deps import verify_app_auth
 from jarvis_recipes.app.api.routes import api_router
-from jarvis_recipes.app.core.config import get_settings
 from jarvis_recipes.app.core import service_config
+from jarvis_recipes.app.core.config import get_settings
+from jarvis_recipes.app.services.settings_service import get_settings_service
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,13 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(api_router)
     app.mount("/media", StaticFiles(directory=settings.media_root), name="media")
+
+    # Settings routes (app-to-app auth)
+    _settings_router = create_settings_router(
+        service=get_settings_service(),
+        auth_dependency=verify_app_auth,
+    )
+    app.include_router(_settings_router, prefix="/v1/settings", tags=["settings"])
 
     @app.on_event("startup")
     async def startup_event() -> None:

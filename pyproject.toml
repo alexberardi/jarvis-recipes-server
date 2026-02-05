@@ -28,6 +28,10 @@ dependencies = [
     "redis (>=5.0.0,<6.0.0)"
 ]
 
+[tool.poetry.dependencies.jarvis-settings-client]
+path = "../jarvis-settings-client"
+develop = true
+
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
