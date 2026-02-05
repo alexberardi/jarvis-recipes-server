@@ -23,6 +23,36 @@ from sqlalchemy.orm import relationship
 from jarvis_recipes.app.db.base import Base
 
 
+class Setting(Base):
+    """Settings table for runtime configuration with multi-tenant support."""
+
+    __tablename__ = "settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(255), nullable=False, index=True)
+    value = Column(Text, nullable=True)  # JSON-encoded value
+    value_type = Column(String(50), nullable=False, default="string")
+    category = Column(String(100), nullable=False, default="general", index=True)
+    description = Column(Text, nullable=True)
+    requires_reload = Column(Boolean, default=False)
+    is_secret = Column(Boolean, default=False)
+    env_fallback = Column(String(255), nullable=True)
+
+    # Multi-tenant scoping (all nullable = system default)
+    household_id = Column(String(255), nullable=True, index=True)
+    node_id = Column(String(255), nullable=True, index=True)
+    user_id = Column(Integer, nullable=True, index=True)
+
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint(
+            "key", "household_id", "node_id", "user_id", name="uq_setting_scope"
+        ),
+    )
+
+
 class SourceType(str, enum.Enum):
     MANUAL = "manual"
     IMAGE = "image"
