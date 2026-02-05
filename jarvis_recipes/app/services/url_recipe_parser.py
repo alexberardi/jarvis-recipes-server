@@ -8,8 +8,9 @@ import json
 import logging
 from typing import List
 
-import httpx
+import httpx  # noqa: F401 - exposed for test monkeypatching
 
+from jarvis_recipes.app.core.config import get_settings  # noqa: F401 - re-export for tests
 from jarvis_recipes.app.db.models import SourceType
 from jarvis_recipes.app.schemas.recipe import IngredientCreate, RecipeCreate, StepCreate
 
@@ -61,6 +62,9 @@ __all__ = [
     "extract_recipe_from_schema_org",
     "extract_recipe_heuristic",
     "extract_recipe_via_llm",
+    # Re-exports for backward compatibility / tests
+    "get_settings",
+    "httpx",
 ]
 
 
