@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from httpx import HTTPStatusError
 
 from jarvis_recipes.app.schemas.ingestion_input import ImageRef, IngestionInput
+from jarvis_recipes.app.services import url_recipe_parser
 from jarvis_recipes.app.services.url_recipe_parser import (
     ParseResult,
     ParsedRecipe,
@@ -16,7 +17,6 @@ from jarvis_recipes.app.services.url_recipe_parser import (
     extract_recipe_heuristic,
     extract_recipe_from_microdata,
     extract_recipe_via_llm,
-    fetch_html,
     clean_soup_for_content,
     find_main_node,
 )
@@ -58,7 +58,7 @@ async def parse_recipe(input: IngestionInput) -> ParseResult:
         if not input.source_url:
             return ParseResult(success=False, error_code="invalid_payload", error_message="source_url required", warnings=[])
         try:
-            html = await fetch_html(input.source_url)
+            html = await url_recipe_parser.fetch_html(input.source_url)
         except ValueError as exc:
             # Check if this is an encoding/corruption error (not just invalid URL)
             error_msg = str(exc)
