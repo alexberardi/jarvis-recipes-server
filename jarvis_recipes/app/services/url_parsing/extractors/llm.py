@@ -148,15 +148,15 @@ async def extract_recipe_via_llm(
         "stream": False,
     }
 
-    if not settings.jarvis_auth_app_id or not settings.jarvis_auth_app_key:
+    if not settings.jarvis_app_id or not settings.jarvis_app_key:
         raise ValueError(
-            "JARVIS_AUTH_APP_ID and JARVIS_AUTH_APP_KEY must be set for LLM proxy authentication"
+            "JARVIS_APP_ID and JARVIS_APP_KEY must be set for LLM proxy authentication"
         )
 
     headers = {
         "Content-Type": "application/json",
-        "X-Jarvis-App-Id": settings.jarvis_auth_app_id,
-        "X-Jarvis-App-Key": settings.jarvis_auth_app_key,
+        "X-Jarvis-App-Id": settings.jarvis_app_id,
+        "X-Jarvis-App-Key": settings.jarvis_app_key,
     }
 
     timeout = httpx.Timeout(90.0, read=80.0, connect=10.0)

@@ -35,8 +35,8 @@ services:
       # LLM Configuration
       LLM_BASE_URL: ${LLM_BASE_URL:?LLM_BASE_URL is required}
       JARVIS_FULL_MODEL_NAME: ${JARVIS_FULL_MODEL_NAME:-full}
-      JARVIS_AUTH_APP_ID: ${JARVIS_AUTH_APP_ID:?JARVIS_AUTH_APP_ID is required}
-      JARVIS_AUTH_APP_KEY: ${JARVIS_AUTH_APP_KEY:?JARVIS_AUTH_APP_KEY is required}
+      JARVIS_APP_ID: ${JARVIS_APP_ID:?JARVIS_APP_ID is required}
+      JARVIS_APP_KEY: ${JARVIS_APP_KEY:?JARVIS_APP_KEY is required}
       
       # OCR Service Configuration
       JARVIS_OCR_SERVICE_URL: ${JARVIS_OCR_SERVICE_URL:?JARVIS_OCR_SERVICE_URL is required}
@@ -91,8 +91,8 @@ services:
       # LLM Configuration
       LLM_BASE_URL: ${LLM_BASE_URL:?LLM_BASE_URL is required}
       JARVIS_FULL_MODEL_NAME: ${JARVIS_FULL_MODEL_NAME:-full}
-      JARVIS_AUTH_APP_ID: ${JARVIS_AUTH_APP_ID:?JARVIS_AUTH_APP_ID is required}
-      JARVIS_AUTH_APP_KEY: ${JARVIS_AUTH_APP_KEY:?JARVIS_AUTH_APP_KEY is required}
+      JARVIS_APP_ID: ${JARVIS_APP_ID:?JARVIS_APP_ID is required}
+      JARVIS_APP_KEY: ${JARVIS_APP_KEY:?JARVIS_APP_KEY is required}
       
       # OCR Service Configuration
       JARVIS_OCR_SERVICE_URL: ${JARVIS_OCR_SERVICE_URL:?JARVIS_OCR_SERVICE_URL is required}

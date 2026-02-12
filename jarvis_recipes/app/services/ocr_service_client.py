@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 def _get_auth_headers() -> Dict[str, str]:
     """Get authentication headers for OCR service (same as LLM proxy)."""
     settings = get_settings()
-    if not settings.jarvis_auth_app_id or not settings.jarvis_auth_app_key:
-        raise ValueError("JARVIS_AUTH_APP_ID and JARVIS_AUTH_APP_KEY must be set for OCR service authentication")
+    if not settings.jarvis_app_id or not settings.jarvis_app_key:
+        raise ValueError("JARVIS_APP_ID and JARVIS_APP_KEY must be set for OCR service authentication")
     return {
-        "X-Jarvis-App-Id": settings.jarvis_auth_app_id,
-        "X-Jarvis-App-Key": settings.jarvis_auth_app_key,
+        "X-Jarvis-App-Id": settings.jarvis_app_id,
+        "X-Jarvis-App-Key": settings.jarvis_app_key,
     }
 
 
