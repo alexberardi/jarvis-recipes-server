@@ -19,7 +19,7 @@ from jarvis_recipes.app.schemas.meal_plan import (
     Selection,
     Alternative,
 )
-from jarvis_recipes.app.services import llm_client, mailbox_service, recipes_service, static_recipe_service
+from jarvis_recipes.app.services import llm_client, mailbox_service, static_recipe_service
 
 MEAL_ORDER: List[MealType] = ["breakfast", "lunch", "dinner", "snack", "dessert"]
 

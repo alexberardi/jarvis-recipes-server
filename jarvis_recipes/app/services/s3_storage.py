@@ -5,7 +5,6 @@ This module provides backwards-compatible functions while using the new
 object_store module under the hood for unified MinIO/S3 support.
 """
 import logging
-from pathlib import Path
 from typing import Optional, Tuple
 
 from jarvis_recipes.app.core.config import get_settings

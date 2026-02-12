@@ -20,7 +20,6 @@ from jarvis_recipes.app.db import models
 from jarvis_recipes.app.services import mailbox_service, meal_plan_service, parse_job_service, url_recipe_parser
 from jarvis_recipes.app.services.image_ingest_worker import process_image_ingestion_job
 from jarvis_recipes.app.services.ingestion_service import parse_recipe as parse_recipe_ingestion
-from jarvis_recipes.app.services.image_ingest_pipeline import run_ingestion_pipeline
 from jarvis_recipes.app.services import ocr_quality
 from jarvis_recipes.app.services.llm_client import call_text_structuring, clean_and_validate_draft
 from jarvis_recipes.app.services.queue_service import enqueue_job
