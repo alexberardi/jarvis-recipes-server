@@ -193,7 +193,7 @@ def process_job(payload_json: str) -> None:
                     if db:
                         try:
                             db.close()
-                        except Exception:
+                        except Exception as e:
                             pass
             except Exception as db_exc:
                 logger.exception("Failed to create database session to mark job %s as error: %s", job_id, db_exc)
