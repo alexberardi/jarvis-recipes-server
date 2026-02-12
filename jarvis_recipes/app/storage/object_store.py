@@ -7,7 +7,6 @@ configuration.
 """
 import logging
 from functools import lru_cache
-from typing import Optional
 
 import boto3
 from botocore.client import BaseClient

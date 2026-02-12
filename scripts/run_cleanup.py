@@ -5,7 +5,6 @@ Periodic cleanup task for abandoned jobs and expired stage recipes.
 This can be run as a cron job or separate process to clean up stale jobs.
 """
 import logging
-import time
 
 from jarvis_recipes.app.core.config import get_settings
 from jarvis_recipes.app.db.session import SessionLocal

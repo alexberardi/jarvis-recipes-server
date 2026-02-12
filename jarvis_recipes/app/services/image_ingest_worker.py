@@ -12,7 +12,6 @@ from jarvis_recipes.app.db import models
 from jarvis_recipes.app.schemas.ingestion import RecipeDraft
 from jarvis_recipes.app.services import mailbox_service, parse_job_service, s3_storage
 from jarvis_recipes.app.services.image_ingest_pipeline import OCRServiceUnavailableError, run_ingestion_pipeline
-from jarvis_recipes.app.services.url_recipe_parser import ParseResult
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,7 @@
 import base64
 import json
 import logging
-import re
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import httpx
 from bs4 import BeautifulSoup
@@ -12,7 +11,6 @@ from jarvis_recipes.app.schemas.ingestion_input import ImageRef, IngestionInput
 from jarvis_recipes.app.services import url_recipe_parser
 from jarvis_recipes.app.services.url_recipe_parser import (
     ParseResult,
-    ParsedRecipe,
     extract_recipe_from_schema_org,
     extract_recipe_heuristic,
     extract_recipe_from_microdata,

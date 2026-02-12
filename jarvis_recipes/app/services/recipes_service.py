@@ -1,4 +1,4 @@
-from typing import Iterable, List, Optional
+from typing import Iterable, List
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
