@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     llm_full_model_name: str = Field("full", alias="JARVIS_FULL_MODEL_NAME")
     llm_lightweight_model_name: str = Field("lightweight", alias="JARVIS_LIGHTWEIGHT_MODEL_NAME")
     llm_recipe_queue_max_retries: int = Field(3, alias="LLM_RECIPE_QUEUE_MAX_RETRIES")
-    jarvis_auth_app_id: str | None = Field(None, alias="JARVIS_AUTH_APP_ID")
-    jarvis_auth_app_key: str | None = Field(None, alias="JARVIS_AUTH_APP_KEY")
+    jarvis_app_id: str | None = Field(None, alias="JARVIS_APP_ID")
+    jarvis_app_key: str | None = Field(None, alias="JARVIS_APP_KEY")
     recipe_parse_job_abandon_minutes: int = Field(4320, alias="RECIPE_PARSE_JOB_ABANDON_MINUTES")
     recipe_image_max_bytes: int = Field(10 * 1024 * 1024, alias="RECIPE_IMAGE_MAX_BYTES")
     recipe_ocr_tier_max: int = Field(1, alias="RECIPE_OCR_TIER_MAX")  # Only OCR tier now (vision/cloud handled by OCR service)
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     aws_session_token: str | None = Field(None, alias="AWS_SESSION_TOKEN")
     jarvis_ocr_service_url: str | None = Field(None, alias="JARVIS_OCR_SERVICE_URL")
     # OCR service uses same auth as LLM proxy
-    # (jarvis_auth_app_id and jarvis_auth_app_key are reused)
+    # (jarvis_app_id and jarvis_app_key are reused)
     redis_host: str = Field("localhost", alias="REDIS_HOST")
     redis_port: int = Field(6379, alias="REDIS_PORT")
 
