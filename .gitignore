@@ -184,6 +184,9 @@ temp/
 *.tmp
 *.temp
 
+# Test images
+test_images/
+
 # OS files
 .DS_Store
 .AppleDouble

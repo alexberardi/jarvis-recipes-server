@@ -3,7 +3,7 @@ version: "3.9"
 services:
   recipes-api:
     build: .
-    command: bash -c "pip install -e /jarvis-config-client && alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 8001"
+    command: bash -c "pip install -q -e /jarvis-config-client -e /jarvis-settings-client && alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 8001"
     env_file:
       - .env
     environment:
@@ -15,13 +15,14 @@ services:
       - ./media:/app/media
       - ./tests:/app/tests
       - ./jarvis_recipes/recipe_parsing_tests:/app/jarvis_recipes/recipe_parsing_tests
-      - ../jarvis-config-client:/jarvis-config-client:ro
+      - ../jarvis-config-client:/jarvis-config-client
+      - ../jarvis-settings-client:/jarvis-settings-client
     ports:
       - "8001:8001"
 
   parse-worker:
     build: .
-    command: bash -c "pip install -e /jarvis-config-client && alembic upgrade head && python scripts/run_rq_worker.py"
+    command: bash -c "pip install -q -e /jarvis-config-client -e /jarvis-settings-client && python scripts/run_rq_worker.py"
     deploy:
       resources:
         limits:
@@ -31,13 +32,13 @@ services:
     env_file:
       - .env
     environment:
-      - JARVIS_CONFIG_URL=http://host.docker.internal:8020
       - JARVIS_CONFIG_URL_STYLE=dockerized
     extra_hosts:
       - "${DOCKER_HOST_ALIAS:-host.docker.internal}:host-gateway"
     volumes:
       - ./tests:/app/tests
       - ./jarvis_recipes/recipe_parsing_tests:/app/jarvis_recipes/recipe_parsing_tests
-      - ../jarvis-config-client:/jarvis-config-client:ro
+      - ../jarvis-config-client:/jarvis-config-client
+      - ../jarvis-settings-client:/jarvis-settings-client
     depends_on:
       - recipes-api
