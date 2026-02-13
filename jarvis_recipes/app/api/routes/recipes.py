@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -16,12 +17,13 @@ from jarvis_recipes.app.schemas.recipe import RecipeCreate, RecipeRead, RecipeUp
 from jarvis_recipes.app.services import recipes_service
 from jarvis_recipes.app.services import url_recipe_parser
 from jarvis_recipes.app.db import models
-from jarvis_recipes.app.services import meal_plan_service
 from jarvis_recipes.app.schemas.parse_job import ParseJobCreate, ParseJobStatus
 from jarvis_recipes.app.services import parse_job_service
 from jarvis_recipes.app.services.url_recipe_parser import preflight_validate_url
 from jarvis_recipes.app.db import models as db_models
 from jarvis_recipes.app.services import static_recipe_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
@@ -266,8 +268,7 @@ def get_parse_job_status(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    print(current_user.id)
-    print(job_id)
+    logger.debug("get_parse_job_status: user_id=%s, job_id=%s", current_user.id, job_id)
     job = parse_job_service.get_job_for_user(db, job_id, current_user.id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
