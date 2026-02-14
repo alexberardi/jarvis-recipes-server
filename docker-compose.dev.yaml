@@ -3,18 +3,21 @@ version: "3.9"
 services:
   recipes-api:
     build: .
-    command: bash -c "pip install -q -e /jarvis-config-client -e /jarvis-settings-client && alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 8001"
+    command: bash -c "pip install -q -e . -e /jarvis-config-client -e /jarvis-settings-client && alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 8001 --reload"
     env_file:
       - .env
     environment:
       - JARVIS_CONFIG_URL=http://host.docker.internal:8020
       - JARVIS_CONFIG_URL_STYLE=dockerized
+      - REDIS_HOST=host.docker.internal
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     extra_hosts:
       - "${DOCKER_HOST_ALIAS:-host.docker.internal}:host-gateway"
     volumes:
+      - ./jarvis_recipes:/app/jarvis_recipes
       - ./media:/app/media
       - ./tests:/app/tests
-      - ./jarvis_recipes/recipe_parsing_tests:/app/jarvis_recipes/recipe_parsing_tests
       - ../jarvis-config-client:/jarvis-config-client
       - ../jarvis-settings-client:/jarvis-settings-client
     ports:
@@ -22,7 +25,7 @@ services:
 
   parse-worker:
     build: .
-    command: bash -c "pip install -q -e /jarvis-config-client -e /jarvis-settings-client && python scripts/run_rq_worker.py"
+    command: bash -c "pip install -q -e . -e /jarvis-config-client -e /jarvis-settings-client && python scripts/run_rq_worker.py"
     deploy:
       resources:
         limits:
@@ -33,12 +36,45 @@ services:
       - .env
     environment:
       - JARVIS_CONFIG_URL_STYLE=dockerized
+      - REDIS_HOST=host.docker.internal
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     extra_hosts:
       - "${DOCKER_HOST_ALIAS:-host.docker.internal}:host-gateway"
     volumes:
+      - ./jarvis_recipes:/app/jarvis_recipes
       - ./tests:/app/tests
-      - ./jarvis_recipes/recipe_parsing_tests:/app/jarvis_recipes/recipe_parsing_tests
       - ../jarvis-config-client:/jarvis-config-client
       - ../jarvis-settings-client:/jarvis-settings-client
     depends_on:
       - recipes-api
+
+  postgres:
+    profiles: ["standalone"]
+    image: postgres:15
+    environment:
+      POSTGRES_DB: jarvis_recipes
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - recipes-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    profiles: ["standalone"]
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  recipes-pg-data:
