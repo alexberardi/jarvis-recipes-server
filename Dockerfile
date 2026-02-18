@@ -44,5 +44,5 @@ RUN echo "=== Checking installed commands ===" \
     && pip list | grep -E "alembic|uvicorn|fastapi" || echo "packages not found" \
     && echo "=== Verification complete ==="
 
-CMD ["bash", "-c", "alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 8001"]
+CMD ["bash", "-c", "alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 7030"]
 

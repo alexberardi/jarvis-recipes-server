@@ -73,7 +73,7 @@ docker-compose -f docker-compose.staging.yml ps
 docker-compose -f docker-compose.staging.yml logs -f
 
 # Test API
-curl http://localhost:8001/health
+curl http://localhost:7030/health
 ```
 
 ---
@@ -97,10 +97,10 @@ Change ports in `.env`:
 
 ```bash
 # Internal container port
-APP_PORT=8001
+APP_PORT=7030
 
 # External host port (what you access)
-HOST_PORT=8001
+HOST_PORT=7030
 ```
 
 Example - run on port 8080:
@@ -111,10 +111,10 @@ HOST_PORT=8080
 Example - run multiple instances:
 ```bash
 # Instance 1
-HOST_PORT=8001
+HOST_PORT=7030
 
 # Instance 2 (separate .env)
-HOST_PORT=8002
+HOST_PORT=7031
 ```
 
 ---
@@ -154,7 +154,7 @@ docker-compose -f docker-compose.staging.yml up -d
 - [ ] Set LLM proxy URL and credentials
 - [ ] Configure ports (optional)
 - [ ] Run `docker-compose up -d`
-- [ ] Test with `curl http://localhost:8001/health`
+- [ ] Test with `curl http://localhost:7030/health`
 
 ---
 

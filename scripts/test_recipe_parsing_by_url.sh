@@ -7,7 +7,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 RECIPE_URL="$1"
-API_BASE="${API_BASE:-http://localhost:8001}"
+API_BASE="${API_BASE:-http://localhost:7030}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Get a token using default issue_token.sh behavior
