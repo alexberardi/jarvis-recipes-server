@@ -52,4 +52,3 @@ markers = [
     "asyncio: mark test as asyncio-based",
     "integration: mark test as integration test requiring external services (Redis, OCR, etc.)",
 ]
-addopts = "-m 'not integration'"
