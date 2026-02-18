@@ -59,7 +59,7 @@ def redis_client():
     # Test connection
     try:
         client.ping()
-    except redis.ConnectionError as e:
+    except (redis.ConnectionError, redis.TimeoutError) as e:
         pytest.skip(f"Redis not available: {e}")
     yield client
     client.close()

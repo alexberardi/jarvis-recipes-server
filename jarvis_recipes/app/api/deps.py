@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 
 import httpx
@@ -7,6 +6,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
+from jarvis_recipes.app.core import service_config
 from jarvis_recipes.app.core.config import get_settings
 from jarvis_recipes.app.db.session import get_db
 from jarvis_recipes.app.schemas.auth import CurrentUser
@@ -27,9 +27,10 @@ async def verify_app_auth(
     if not x_jarvis_app_id or not x_jarvis_app_key:
         raise HTTPException(status_code=401, detail="Missing app credentials")
 
-    jarvis_auth_base = os.getenv("JARVIS_AUTH_BASE_URL")
-    if not jarvis_auth_base:
-        raise HTTPException(status_code=500, detail="JARVIS_AUTH_BASE_URL not configured")
+    try:
+        jarvis_auth_base = service_config.get_auth_url()
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     app_ping = jarvis_auth_base.rstrip("/") + "/internal/app-ping"
     async with httpx.AsyncClient(timeout=5.0) as client:

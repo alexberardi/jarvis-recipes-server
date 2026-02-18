@@ -1,31 +1,4 @@
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from jarvis_recipes.app.db.base import Base
-from jarvis_recipes.app.db import models  # noqa: F401
-
-
-@pytest.fixture(scope="session")
-def engine():
-    engine = create_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, future=True)
-    Base.metadata.create_all(bind=engine)
-    return engine
-
-
-@pytest.fixture
-def db_session(engine):
-    connection = engine.connect()
-    transaction = connection.begin()
-    SessionLocal = sessionmaker(bind=connection, autocommit=False, autoflush=False, future=True)
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-        transaction.rollback()
-        connection.close()
-import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
 from sqlalchemy import create_engine

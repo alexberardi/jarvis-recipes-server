@@ -79,10 +79,10 @@ docker-compose -f docker-compose.staging.yml logs -f
 
 ```bash
 # Check service health
-curl http://localhost:8001/health
+curl http://localhost:7030/health
 
 # Check API is responding
-curl http://localhost:8001/docs
+curl http://localhost:7030/docs
 
 # View logs
 docker-compose -f docker-compose.staging.yml logs recipes-api
@@ -244,10 +244,10 @@ Add a reverse proxy (nginx or traefik) with SSL certificates.
 ### 4. Firewall Configuration
 ```bash
 # Allow API port
-sudo ufw allow 8001/tcp
+sudo ufw allow 7030/tcp
 
 # Or restrict to specific IP
-sudo ufw allow from YOUR_IP to any port 8001
+sudo ufw allow from YOUR_IP to any port 7030
 ```
 
 ---
@@ -352,8 +352,8 @@ docker-compose -f docker-compose.staging.yml up -d --scale parse-worker=3
 | `LLM_BASE_URL` | Yes | - | LLM proxy URL |
 | `JARVIS_AUTH_APP_ID` | Yes | - | Jarvis authentication app ID (for LLM proxy and OCR service) |
 | `JARVIS_AUTH_APP_KEY` | Yes | - | Jarvis authentication app key (for LLM proxy and OCR service) |
-| `APP_PORT` | No | `8001` | Internal container port |
-| `HOST_PORT` | No | `8001` | External port exposed to host |
+| `APP_PORT` | No | `7030` | Internal container port |
+| `HOST_PORT` | No | `7030` | External port exposed to host |
 | `POSTGRES_DB` | No | `jarvis_recipes` | Database name |
 | `POSTGRES_USER` | No | `jarvis` | Database user |
 

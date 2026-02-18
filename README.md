@@ -11,14 +11,14 @@ FastAPI service for recipe CRUD, tags, mocked imports, and planner stubs per PRD
 poetry install
 cp .env.example .env  # edit secrets as needed
 poetry run alembic upgrade head
-poetry run uvicorn jarvis_recipes.app.main:app --reload --port 8001
+poetry run uvicorn jarvis_recipes.app.main:app --reload --port 7030
 ```
-API docs: http://localhost:8001/docs
+API docs: http://localhost:7030/docs
 
 ## Docker
 ```bash
 docker-compose up --build
-# API at http://localhost:8001/docs
+# API at http://localhost:7030/docs
 ```
 
 ## Tests

@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     # (jarvis_app_id and jarvis_app_key are reused)
     redis_host: str = Field("localhost", alias="REDIS_HOST")
     redis_port: int = Field(6379, alias="REDIS_PORT")
+    redis_password: str | None = Field(None, alias="REDIS_PASSWORD")
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 

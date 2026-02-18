@@ -34,6 +34,7 @@ def get_redis_connection() -> Redis:
         _redis_conn = Redis(
             host=settings.redis_host,
             port=settings.redis_port,
+            password=settings.redis_password,
             decode_responses=False,  # RQ expects bytes
         )
     return _redis_conn

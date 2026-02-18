@@ -3,11 +3,11 @@ version: "3.9"
 services:
   recipes-api:
     build: .
-    command: bash -c "pip install -q -e . -e /jarvis-config-client -e /jarvis-settings-client && alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 8001 --reload"
+    command: bash -c "pip install -q -e . -e /jarvis-config-client -e /jarvis-settings-client && alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 7030 --reload"
     env_file:
       - .env
     environment:
-      - JARVIS_CONFIG_URL=http://host.docker.internal:8020
+      - JARVIS_CONFIG_URL=http://host.docker.internal:7700
       - JARVIS_CONFIG_URL_STYLE=dockerized
       - REDIS_HOST=host.docker.internal
       - REDIS_PORT=${REDIS_PORT:-6379}
@@ -21,7 +21,7 @@ services:
       - ../jarvis-config-client:/jarvis-config-client
       - ../jarvis-settings-client:/jarvis-settings-client
     ports:
-      - "8001:8001"
+      - "7030:7030"
 
   parse-worker:
     build: .
