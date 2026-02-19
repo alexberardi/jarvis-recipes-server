@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from jarvis_settings_client import create_settings_router, create_superuser_auth
+from jarvis_settings_client import create_combined_auth, create_settings_router, create_superuser_auth
 from starlette import status
 
 from jarvis_recipes.app.api.deps import verify_app_auth
@@ -44,10 +44,10 @@ def create_app() -> FastAPI:
     app.mount("/media", StaticFiles(directory=settings.media_root), name="media")
 
     # Settings routes (app-to-app auth for reads, superuser JWT for writes)
-    _auth_url = os.getenv("JARVIS_AUTH_BASE_URL", "http://localhost:8007")
+    _auth_url = os.getenv("JARVIS_AUTH_BASE_URL", "http://localhost:7701")
     _settings_router = create_settings_router(
         service=get_settings_service(),
-        auth_dependency=verify_app_auth,
+        auth_dependency=create_combined_auth(_auth_url),
         write_auth_dependency=create_superuser_auth(_auth_url),
     )
     app.include_router(_settings_router, prefix="/settings", tags=["settings"])
