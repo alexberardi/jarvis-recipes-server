@@ -52,3 +52,35 @@ markers = [
     "asyncio: mark test as asyncio-based",
     "integration: mark test as integration test requiring external services (Redis, OCR, etc.)",
 ]
+
+[tool.coverage.run]
+source = ["jarvis_recipes"]
+omit = [
+    # Workers require Redis/RQ runtime
+    "jarvis_recipes/app/services/queue_worker.py",
+    "jarvis_recipes/app/services/image_ingest_worker.py",
+    "jarvis_recipes/app/services/queue_service.py",
+    # External service clients (LLM proxy, OCR service, S3/MinIO)
+    "jarvis_recipes/app/services/llm_client.py",
+    "jarvis_recipes/app/services/ocr_service_client.py",
+    "jarvis_recipes/app/services/ocr_quality.py",
+    "jarvis_recipes/app/services/s3_storage.py",
+    "jarvis_recipes/app/storage/object_store.py",
+    # Database session setup (requires live Postgres)
+    "jarvis_recipes/app/db/session.py",
+    # Static data seed scripts
+    "jarvis_recipes/app/services/static_recipe_service.py",
+    "jarvis_recipes/app/services/static_seed_service.py",
+    # App entrypoint / startup
+    "jarvis_recipes/app/main.py",
+    # Alembic migrations
+    "jarvis_recipes/alembic/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
