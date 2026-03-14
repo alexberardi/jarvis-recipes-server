@@ -134,7 +134,7 @@ async def extract_recipe_via_llm(
         "- Tags: general categories only (e.g., 'chicken', 'dinner'), not recipe names\n"
     )
 
-    model_name = settings.llm_full_model_name or "full"
+    model_name = settings.llm_full_model_name or "live"
 
     payload = {
         "model": model_name,
