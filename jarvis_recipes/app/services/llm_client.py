@@ -314,7 +314,7 @@ def _try_local_json_repair(raw: str) -> Optional[str]:
 async def _repair_json_via_full_llm(broken_json: str, schema_hint: str, timeout_seconds: int = 60) -> Optional[str]:
     settings = get_settings()
     payload = {
-        "model": settings.llm_full_model_name or "full",
+        "model": settings.llm_full_model_name or "live",
         "temperature": 0.0,
         "response_format": {"type": "json_object"},
         "messages": [
@@ -424,7 +424,7 @@ async def clean_and_validate_draft(draft: RecipeDraft, model_name: str) -> Recip
     draft_json = draft.model_dump(mode="json")
     
     payload = {
-        "model": model_name or settings.llm_lightweight_model_name or "lightweight",
+        "model": model_name or settings.llm_lightweight_model_name or "live",
         "temperature": 0.0,
         "response_format": {"type": "json_object"},
         "messages": [
@@ -501,7 +501,7 @@ async def clean_and_validate_draft(draft: RecipeDraft, model_name: str) -> Recip
 async def call_text_structuring(text: str, model_name: str) -> RecipeDraft:
     settings = get_settings()
     payload = {
-        "model": model_name or settings.llm_full_model_name or "full",
+        "model": model_name or settings.llm_full_model_name or "live",
         "temperature": 0.0,
         "response_format": {"type": "json_object"},
         "messages": [
@@ -629,7 +629,7 @@ async def call_meal_plan_select(
     )
     
     payload = {
-        "model": model_name or settings.llm_full_model_name or "full",
+        "model": model_name or settings.llm_full_model_name or "live",
         "temperature": 0.2,
         "response_format": {"type": "json_object"},
         "messages": [
