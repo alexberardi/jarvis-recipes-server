@@ -29,8 +29,8 @@ dependencies = [
 ]
 
 [tool.poetry.dependencies.jarvis-settings-client]
-git = "https://github.com/alexberardi/jarvis-settings-client.git", rev = "9902feb"
-branch = "main"
+git = "https://github.com/alexberardi/jarvis-settings-client.git"
+rev = "9902feb"
 
 
 [build-system]
