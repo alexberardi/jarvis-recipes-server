@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [tool.poetry.dependencies.jarvis-settings-client]
-git = "https://github.com/alexberardi/jarvis-settings-client.git", rev = "9902feb"
+git = "https://github.com/alexberardi/jarvis-settings-client.git"
 rev = "9902feb"
 
 
