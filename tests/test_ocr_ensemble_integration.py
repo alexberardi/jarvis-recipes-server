@@ -35,7 +35,7 @@ from jarvis_recipes.app.services import parse_job_service
 from jarvis_recipes.app.services.queue_worker import _process_ocr_completed
 
 # Test configuration
-REDIS_HOST = os.getenv("REDIS_HOST", "10.0.0.122")
+REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "redis")
 OCR_QUEUE = "jarvis.ocr.jobs"
