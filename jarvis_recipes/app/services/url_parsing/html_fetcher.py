@@ -1,10 +1,12 @@
 """HTML fetching and URL validation utilities."""
 
+import asyncio
 import ipaddress
 import json
 import logging
 import os
 import re
+import socket
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -15,15 +17,139 @@ from jarvis_recipes.app.services.url_parsing.models import PreflightResult
 
 logger = logging.getLogger(__name__)
 
+_MAX_REDIRECTS = 5
+# 3xx codes that carry a Location and should be followed (mirrors httpx semantics;
+# excludes 300/304/305/306).
+_REDIRECT_CODES = {301, 302, 303, 307, 308}
+# Request headers that must not be replayed to a different origin on redirect.
+_SENSITIVE_HEADERS = {"authorization", "cookie", "proxy-authorization"}
+
+
+def _ip_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """True if ``ip`` is unsafe for outbound fetching (SSRF guard).
+
+    Loopback, private, link-local (169.254/16, fe80::/10), reserved (incl. the
+    NAT64 well-known prefix), multicast, unspecified, and — via ``not is_global``
+    — CGNAT 100.64/10 and other non-global ranges. IPv4-mapped IPv6 is judged as
+    its embedded IPv4.
+    """
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        ip = mapped
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+        or not ip.is_global
+    )
+
+
+def _pre_dns_verdict(host: str) -> bool | None:
+    """Synchronous checks needing no DNS; None if the name must be resolved."""
+    if not host:
+        return True
+    try:
+        return _ip_blocked(ipaddress.ip_address(host))
+    except ValueError:
+        pass
+    if host.lower() in {"localhost", "localhost."}:
+        return True
+    return None
+
+
+def _resolved_blocked(addrinfos: list) -> bool:
+    """True if ANY resolved address is unsafe (defeats split-horizon DNS)."""
+    for info in addrinfos:
+        try:
+            if _ip_blocked(ipaddress.ip_address(info[4][0])):
+                return True
+        except ValueError:
+            return True
+    return False
+
 
 def is_private_host(host: str) -> bool:
-    """Check if a host is private/localhost."""
-    hostname = host.split(":")[0]
+    """True if ``host`` is, or DNS-resolves to, a private/disallowed address.
+
+    Pass a bare host (``urlparse().hostname`` strips brackets and the port). Do
+    NOT split on ':' (it mangled IPv6, the original bug). Fails closed: an
+    unresolvable host is treated as private. Synchronous (blocking
+    ``getaddrinfo``); async callers use :func:`_host_blocked`.
+    """
+    verdict = _pre_dns_verdict(host)
+    if verdict is not None:
+        return verdict
     try:
-        ip = ipaddress.ip_address(hostname)
-        return ip.is_private or ip.is_loopback
-    except ValueError:
-        return hostname.lower() in {"localhost"}
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return True
+    return _resolved_blocked(infos)
+
+
+async def _host_blocked(host: str) -> bool:
+    """Async form of :func:`is_private_host` — resolves DNS off the event loop."""
+    verdict = _pre_dns_verdict(host)
+    if verdict is not None:
+        return verdict
+    try:
+        loop = asyncio.get_running_loop()
+        infos = await loop.getaddrinfo(host, None)
+    except socket.gaierror:
+        return True
+    return _resolved_blocked(infos)
+
+
+def _origin(u: str) -> tuple[str, str | None, int | None]:
+    p = urlparse(u)
+    return (p.scheme, p.hostname, p.port)
+
+
+async def _request_following_redirects(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    *,
+    headers: dict,
+    cookies: dict | None = None,
+    max_redirects: int = _MAX_REDIRECTS,
+    block: bool = True,
+) -> httpx.Response:
+    """Issue ``method`` against ``url``, following redirects manually so every
+    hop's host is re-validated (a single up-front check is bypassable by a 3xx).
+    Sensitive headers/cookies are dropped on cross-origin hops. The client must
+    be created with ``follow_redirects=False``. Raises ``ValueError`` on a
+    blocked/invalid hop or when ``max_redirects`` is exceeded.
+    """
+    current = url
+    current_headers = dict(headers)
+    current_cookies = cookies
+    for _ in range(max_redirects + 1):
+        parsed = urlparse(current)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("Invalid redirect target")
+        if block and await _host_blocked(parsed.hostname):
+            raise ValueError("URL points to a private or disallowed host")
+        # Dispatch by method name (client.head / client.get) rather than
+        # client.request so existing call sites and test mocks keep working.
+        resp = await getattr(client, method.lower())(
+            current, headers=current_headers, cookies=current_cookies
+        )
+        if resp.status_code in _REDIRECT_CODES and "location" in resp.headers:
+            next_url = str(httpx.URL(current).join(resp.headers["location"]))
+            if _origin(next_url) != _origin(current):
+                current_headers = {
+                    k: v
+                    for k, v in current_headers.items()
+                    if k.lower() not in _SENSITIVE_HEADERS
+                }
+                current_cookies = None
+            current = next_url
+            continue
+        return resp
+    raise ValueError("Too many redirects")
 
 
 async def preflight_validate_url(url: str, timeout: float = 3.0) -> PreflightResult:
@@ -35,7 +161,7 @@ async def preflight_validate_url(url: str, timeout: float = 3.0) -> PreflightRes
             error_code="invalid_url",
             error_message="URL must start with http or https.",
         )
-    if not parsed.netloc or is_private_host(parsed.hostname or ""):
+    if not parsed.hostname or await _host_blocked(parsed.hostname):
         return PreflightResult(
             ok=False,
             error_code="invalid_url",
@@ -56,12 +182,23 @@ async def preflight_validate_url(url: str, timeout: float = 3.0) -> PreflightRes
         except json.JSONDecodeError:
             cookies = {}
 
-    async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+    async with httpx.AsyncClient(follow_redirects=False, timeout=timeout) as client:
         resp = None
         try:
-            resp = await client.head(url, headers=headers, cookies=cookies)
+            # Manual redirect walk: re-validate the host on every 3xx hop.
+            resp = await _request_following_redirects(
+                client, "HEAD", url, headers=headers, cookies=cookies
+            )
             if resp.status_code == 405:
-                resp = await client.get(url, headers=headers, cookies=cookies)
+                resp = await _request_following_redirects(
+                    client, "GET", url, headers=headers, cookies=cookies
+                )
+        except ValueError:
+            return PreflightResult(
+                ok=False,
+                error_code="invalid_url",
+                error_message="Host is blocked (localhost/private).",
+            )
         except httpx.ConnectTimeout:
             return PreflightResult(
                 ok=False,
@@ -105,11 +242,9 @@ async def preflight_validate_url(url: str, timeout: float = 3.0) -> PreflightRes
     # For successful responses, fetch a small sample to check encoding
     if resp.status_code == 200:
         try:
-            async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
-                sample_resp = await client.get(
-                    url,
-                    headers=headers,
-                    cookies=cookies,
+            async with httpx.AsyncClient(follow_redirects=False, timeout=timeout) as client:
+                sample_resp = await _request_following_redirects(
+                    client, "GET", url, headers=headers, cookies=cookies
                 )
                 content_bytes = sample_resp.content[:5000]
 
@@ -184,9 +319,11 @@ async def preflight_validate_url(url: str, timeout: float = 3.0) -> PreflightRes
 async def fetch_html(url: str) -> str:
     """Fetch HTML content from a URL with encoding handling and fallbacks."""
     parsed_url = urlparse(url)
-    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+    if parsed_url.scheme not in {"http", "https"} or not parsed_url.hostname:
         raise ValueError("Invalid URL")
-    if is_private_host(parsed_url.hostname or ""):
+    # DNS-resolving check up front: also guarantees the r.jina.ai fallback below
+    # never proxies a host that resolves to an internal/private target.
+    if await _host_blocked(parsed_url.hostname):
         raise ValueError("URL points to a private or disallowed host")
 
     headers = {
@@ -210,10 +347,13 @@ async def fetch_html(url: str) -> str:
         target_url: str, extra_headers: Optional[dict] = None
     ) -> httpx.Response:
         merged_headers = headers | (extra_headers or {})
+        # follow_redirects=False + manual walk so each 3xx hop is re-validated.
         async with httpx.AsyncClient(
-            timeout=timeout, follow_redirects=True, headers=merged_headers
+            timeout=timeout, follow_redirects=False
         ) as client:
-            return await client.get(target_url)
+            return await _request_following_redirects(
+                client, "GET", target_url, headers=merged_headers
+            )
 
     try:
         response = await _try_fetch(url)
