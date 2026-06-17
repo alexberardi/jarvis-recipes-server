@@ -1,4 +1,13 @@
-"""HTML fetching and URL validation utilities."""
+"""HTML fetching and URL validation utilities.
+
+Operator responsibility: this fetcher is intended only for sources the operator
+is permitted to fetch. The operator is responsible for complying with each
+source site's Terms of Service and robots.txt. ``SCRAPER_COOKIES`` and the
+``r.jina.ai`` reader-proxy fallback (used only when a direct fetch is blocked)
+are user-supplied/user-configured; providing cookies asserts you have permission
+to access that content. SSRF guards (see :func:`_host_blocked`) still apply to
+the original URL before any proxy fetch. See the README's "URL scraping" section.
+"""
 
 import asyncio
 import ipaddress
