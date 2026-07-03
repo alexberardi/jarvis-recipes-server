@@ -1,3 +1,4 @@
+import hmac
 from pathlib import Path
 from typing import Optional
 
@@ -39,7 +40,7 @@ def seed_static_data(
     admin_secret: Optional[str] = Header(default=None, convert_underscores=False, alias="X-Admin-Secret"),
 ):
     settings = get_settings()
-    if not admin_secret or admin_secret != settings.admin_secret:
+    if not admin_secret or not hmac.compare_digest(admin_secret, settings.admin_secret):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin secret")
 
     base_path = Path(__file__).resolve().parents[4] / "static_data"
@@ -54,7 +55,7 @@ def seed_static_recipes(
     admin_secret: Optional[str] = Header(default=None, convert_underscores=False, alias="X-Admin-Secret"),
 ):
     settings = get_settings()
-    if not admin_secret or admin_secret != settings.admin_secret:
+    if not admin_secret or not hmac.compare_digest(admin_secret, settings.admin_secret):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin secret")
     base_path = Path(__file__).resolve().parents[4] / "static_data"
     stats = static_recipe_service.seed_stock_recipes(db, base_path, user_id)
