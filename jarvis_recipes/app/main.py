@@ -12,7 +12,7 @@ from starlette import status
 from jarvis_recipes.app.api.deps import verify_app_auth
 from jarvis_recipes.app.api.routes import api_router
 from jarvis_recipes.app.core import service_config
-from jarvis_recipes.app.core.config import get_settings
+from jarvis_recipes.app.core.config import enforce_secret_security, get_settings
 from jarvis_recipes.app.services.settings_service import get_settings_service
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,8 @@ async def validation_exception_handler(request, exc: RequestValidationError):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    # Warn (dev) or refuse to boot (production) on placeholder/weak secrets.
+    enforce_secret_security(settings, logger)
     app = FastAPI(title="Jarvis Recipes", version="0.1.0")
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.include_router(api_router)

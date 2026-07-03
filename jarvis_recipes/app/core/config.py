@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     auth_algorithm: str = Field("HS256", alias="AUTH_ALGORITHM")
     media_root: Path = Path("media")
     admin_secret: str = Field("admin-secret", alias="ADMIN_SECRET")
+    # Deployment environment. "production"/"prod" makes a weak/placeholder secret
+    # fatal at boot; otherwise it's a loud warning (so a self-host box still on a
+    # shipped default keeps running). Set JARVIS_ENV=production in prod.
+    jarvis_env: str = Field("development", alias="JARVIS_ENV")
     llm_base_url: str | None = Field(None, alias="LLM_BASE_URL")
     llm_full_model_name: str = Field("live", alias="JARVIS_FULL_MODEL_NAME")
     llm_lightweight_model_name: str = Field("live", alias="JARVIS_LIGHTWEIGHT_MODEL_NAME")
@@ -53,6 +57,52 @@ class Settings(BaseSettings):
     redis_password: str | None = Field(None, alias="REDIS_PASSWORD")
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
+
+    @property
+    def is_production(self) -> bool:
+        return self.jarvis_env.strip().lower() in {"production", "prod"}
+
+    def insecure_secrets(self) -> list[str]:
+        """Names of security-critical secrets that are empty, a known placeholder,
+        or too short/low-entropy. Empty list = all good.
+
+        ``auth_secret_key`` validates every JWT (shared with jarvis-auth) and
+        ``admin_secret`` gates the admin stock endpoints — a shipped default here
+        means forgeable tokens / an open admin surface.
+        """
+        placeholders = {
+            "", "change-me", "changeme", "change_me", "admin-secret",
+            "__set_me__", "changethis", "secret", "your-secret-key",
+        }
+
+        def _insecure(value: str | None) -> bool:
+            v = (value or "").strip()
+            return v.lower() in placeholders or len(v) < 16
+
+        problems: list[str] = []
+        if _insecure(self.auth_secret_key):
+            problems.append("AUTH_SECRET_KEY")
+        if _insecure(self.admin_secret):
+            problems.append("ADMIN_SECRET")
+        return problems
+
+
+def enforce_secret_security(cfg: "Settings", log) -> None:
+    """Warn on insecure secrets everywhere; abort startup only in production."""
+    problems = cfg.insecure_secrets()
+    if not problems:
+        return
+    detail = (
+        ", ".join(problems)
+        + " is empty, a known placeholder, or shorter than 16 chars. Set a strong "
+        "random value (e.g. `openssl rand -hex 32`)."
+    )
+    if cfg.is_production:
+        raise RuntimeError(f"Refusing to start in production — insecure config: {detail}")
+    log.warning(
+        "⚠️  Insecure config: %s  (set JARVIS_ENV=production to make this fatal)",
+        detail,
+    )
 
 
 logger = logging.getLogger(__name__)
