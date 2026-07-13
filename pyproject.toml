@@ -3,7 +3,7 @@ name = "jarvis-recipes"
 version = "0.1.0"
 description = "Jarvis Recipes FastAPI service"
 authors = [
-    {name = "alexberardi",email = "alexmberardi@gmail.com"}
+    {name = "alexberardi",email = "alex@jarvisautomation.io"}
 ]
 readme = "README.md"
 requires-python = "^3.11"
