@@ -22,6 +22,10 @@ from urllib.parse import urlparse
 import httpx
 
 from jarvis_recipes.app.core.config import get_settings
+from jarvis_recipes.app.services.settings_service import (
+    DEFAULT_SCRAPER_USER_AGENT,
+    get_settings_service,
+)
 from jarvis_recipes.app.services.url_parsing.models import PreflightResult
 
 logger = logging.getLogger(__name__)
@@ -179,7 +183,9 @@ async def preflight_validate_url(url: str, timeout: float = 3.0) -> PreflightRes
 
     settings = get_settings()
     headers = {
-        "User-Agent": settings.scraper_user_agent,
+        "User-Agent": get_settings_service().get_str(
+            "scraper.user_agent", DEFAULT_SCRAPER_USER_AGENT
+        ),
         "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Connection": "keep-alive",

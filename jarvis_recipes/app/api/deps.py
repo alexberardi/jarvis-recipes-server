@@ -10,6 +10,7 @@ from jarvis_recipes.app.core import service_config
 from jarvis_recipes.app.core.config import get_settings
 from jarvis_recipes.app.db.session import get_db
 from jarvis_recipes.app.schemas.auth import CurrentUser
+from jarvis_recipes.app.services.settings_service import get_settings_service
 from jarvis_recipes.app.services.storage.base import StorageProvider
 from jarvis_recipes.app.services.storage.local import LocalStorageProvider
 
@@ -57,10 +58,69 @@ async def verify_app_auth(
     request.state.calling_app_id = x_jarvis_app_id
 
 
+# Key material is bound to the algorithm FAMILY, never a single shared variable.
+# That is what makes the HS256/RS256 dual-accept window safe: an attacker who
+# signs HS256 using the (published, readable) RSA public key as the HMAC secret
+# is verified against auth_secret_key instead, and fails.
+SYMMETRIC_ALGORITHMS = frozenset({"HS256"})
+ASYMMETRIC_ALGORITHMS = frozenset({"RS256"})
+SUPPORTED_ALGORITHMS = SYMMETRIC_ALGORITHMS | ASYMMETRIC_ALGORITHMS
+
+_public_key_cache: str | None = None
+
+
+def _rs256_public_key() -> str | None:
+    """Fetch and cache jarvis-auth's public key.
+
+    Implemented here rather than via jarvis-auth-client on purpose: this service
+    is being decoupled from the Jarvis stack, so taking a new dependency on a
+    Jarvis library to verify a token would move it in the wrong direction. The
+    public key is fetched over plain HTTP from a URL this service already knows.
+
+    Cached for the process lifetime: a *running* service must keep verifying if
+    jarvis-auth goes down. Only a cold start during an outage fails, and it fails
+    closed.
+    """
+    global _public_key_cache
+    if _public_key_cache:
+        return _public_key_cache
+
+    auth_url = service_config.get_auth_url()
+    if not auth_url:
+        return None
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.get(f"{auth_url.rstrip('/')}/auth/public-key")
+            resp.raise_for_status()
+            _public_key_cache = resp.json().get("public_key")
+    except (httpx.HTTPError, ValueError):
+        return None
+    return _public_key_cache
+
+
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> CurrentUser:
     settings = get_settings()
+    # AUTH_SECRET_KEY stays a pydantic secret. The algorithm is no longer read
+    # from settings for *verification* — during the HS256 -> RS256 migration a
+    # verifier must accept both, so the algorithm is taken per token from an
+    # explicit allowlist instead. The settings key still governs what jarvis-auth
+    # MINTS; it is not this service's business what it accepts.
     try:
-        payload = jwt.decode(credentials.credentials, settings.auth_secret_key, algorithms=[settings.auth_algorithm])
+        header = jwt.get_unverified_header(credentials.credentials)
+        algorithm = header.get("alg")
+        if algorithm not in SUPPORTED_ALGORITHMS:
+            # Covers "none" and anything else exotic.
+            raise JWTError(f"Unsupported token algorithm: {algorithm!r}")
+
+        if algorithm in ASYMMETRIC_ALGORITHMS:
+            key = _rs256_public_key()
+            if not key:
+                # Fail CLOSED — an RS256 token we cannot check is not accepted.
+                raise JWTError("No RS256 public key available")
+        else:
+            key = settings.auth_secret_key
+
+        payload = jwt.decode(credentials.credentials, key, algorithms=[algorithm])
         sub = payload.get("sub")
         if sub is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")

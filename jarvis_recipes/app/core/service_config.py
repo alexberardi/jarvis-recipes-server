@@ -118,7 +118,12 @@ def _get_url(service_name: str) -> str:
     """
     # Try config service first
     if _has_config_client and _initialized:
-        url = get_service_url(service_name)
+        try:
+            url = get_service_url(service_name)
+        except RuntimeError:
+            # init() ran without JARVIS_CONFIG_URL, so the config client was never
+            # started. Fall through to the env var chain instead of raising.
+            url = None
         if url:
             return url
 

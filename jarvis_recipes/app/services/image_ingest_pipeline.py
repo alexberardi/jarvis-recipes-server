@@ -7,6 +7,7 @@ from jarvis_recipes.app.db import models
 from jarvis_recipes.app.schemas.ingestion import RecipeDraft
 from jarvis_recipes.app.schemas.recipe import RecipeCreate
 from jarvis_recipes.app.services import llm_client, ocr_quality, ocr_service_client
+from jarvis_recipes.app.services.settings_service import get_settings_service
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,10 @@ async def run_ingestion_pipeline(
             if q["pass_gate"]:
                 try:
                     logger.info("Attempting text structuring with lightweight model for ingestion %s", ingestion.id)
-                    draft = await llm_client.call_text_structuring(combined_text, settings.llm_lightweight_model_name)
+                    lightweight_model = get_settings_service().get_str(
+                        "llm.lightweight_model_name", "live"
+                    )
+                    draft = await llm_client.call_text_structuring(combined_text, lightweight_model)
                     logger.info("Text structuring succeeded, validating draft for ingestion %s", ingestion.id)
                     draft.validate_minimums()
                     logger.info("Draft validation passed for ingestion %s", ingestion.id)

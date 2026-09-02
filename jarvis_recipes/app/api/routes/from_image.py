@@ -4,14 +4,17 @@ from typing import List, Optional
 import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy.orm import Session
 
 from jarvis_recipes.app.api.deps import get_current_user, get_db_session
-from jarvis_recipes.app.core.config import get_settings
 from jarvis_recipes.app.db import models
 from jarvis_recipes.app.schemas.auth import CurrentUser
 from jarvis_recipes.app.services import parse_job_service, queue_service, s3_storage
+from jarvis_recipes.app.services.settings_service import (
+    DEFAULT_IMAGE_MAX_BYTES,
+    get_settings_service,
+)
 from io import BytesIO
 
 # Enable HEIC/HEIF support if pillow-heif is installed.
@@ -34,15 +37,15 @@ async def submit_recipe_from_image_job(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    settings = get_settings()
     if not images or len(images) == 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No images provided")
     if len(images) > 8:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Too many images (max 8)")
-    if settings.recipe_image_max_bytes:
+    max_bytes = get_settings_service().get_int("image.max_bytes", DEFAULT_IMAGE_MAX_BYTES)
+    if max_bytes:
         for f in images:
             data = await f.read()
-            if len(data) > settings.recipe_image_max_bytes:
+            if len(data) > max_bytes:
                 raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image too large")
             f.file.seek(0)
 
@@ -58,7 +61,13 @@ async def submit_recipe_from_image_job(
         MIN_PIXELS = 256 * 28 * 28  # ~200k
         MAX_PIXELS = 1280 * 28 * 28  # ~1.0M
 
-        img = Image.open(BytesIO(data)).convert("RGB")
+        # Apply the EXIF orientation tag before anything else looks at pixels.
+        # A phone records rotation as metadata rather than rotating the buffer, so a
+        # portrait iPhone shot arrives tagged orientation=6 with landscape pixels.
+        # The JPEG we save below carries no EXIF, so if we don't bake the rotation in
+        # here it is lost for good and every downstream OCR backend sees the page
+        # sideways.
+        img = ImageOps.exif_transpose(Image.open(BytesIO(data))).convert("RGB")
         w, h = img.size
         pixels = w * h
         if pixels <= MAX_PIXELS:

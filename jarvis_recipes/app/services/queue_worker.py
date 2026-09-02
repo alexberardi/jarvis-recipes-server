@@ -12,7 +12,6 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session
 
-from jarvis_recipes.app.core.config import get_settings
 from jarvis_recipes.app.db.session import SessionLocal
 from jarvis_recipes.app.schemas.ingestion_input import IngestionInput
 from jarvis_recipes.app.schemas.meal_plan import MealPlanGenerateRequest
@@ -23,6 +22,7 @@ from jarvis_recipes.app.services.ingestion_service import parse_recipe as parse_
 from jarvis_recipes.app.services import ocr_quality
 from jarvis_recipes.app.services.llm_client import call_text_structuring, clean_and_validate_draft
 from jarvis_recipes.app.services.queue_service import enqueue_job
+from jarvis_recipes.app.services.settings_service import get_settings_service
 
 logger = logging.getLogger(__name__)
 
@@ -368,13 +368,13 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
             return
         
         # Text structuring (LLM call to extract recipe from combined OCR text)
-        settings = get_settings()
+        lightweight_model = get_settings_service().get_str("llm.lightweight_model_name", "live")
         tier_max = job_data.get("tier_max") or ingestion.tier_max or 3
         
         logger.info("Calling LLM text structuring for job %s with model %s (text_length=%d)", 
-                   job.id, settings.llm_lightweight_model_name, len(combined_text))
+                   job.id, lightweight_model, len(combined_text))
         try:
-            draft = asyncio.run(call_text_structuring(combined_text, settings.llm_lightweight_model_name))
+            draft = asyncio.run(call_text_structuring(combined_text, lightweight_model))
             logger.info("LLM text structuring completed for job %s: draft=%s", job.id, "present" if draft else "None")
             
             if draft:
@@ -423,7 +423,7 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
                     
                     logger.info("Cleaning and validating draft for job %s with lightweight model", job.id)
                     try:
-                        draft = asyncio.run(clean_and_validate_draft(draft, settings.llm_lightweight_model_name))
+                        draft = asyncio.run(clean_and_validate_draft(draft, lightweight_model))
                         logger.info("Draft cleaning completed for job %s", job.id)
                     except Exception as cleanup_exc:
                         logger.warning("Draft cleaning failed for job %s: %s, using original draft", job.id, cleanup_exc)
@@ -576,8 +576,7 @@ def _process_image_job(db: Session, job: Any) -> None:
 
 def _process_ingestion_job(db: Session, job: Any, job_data: Dict[str, Any]) -> None:
     """Process an ingestion job. All exceptions are caught and handled gracefully."""
-    settings = get_settings()
-    max_retries = settings.llm_recipe_queue_max_retries
+    max_retries = get_settings_service().get_int("queue.max_retries", 3)
     
     try:
         input_payload = IngestionInput.model_validate(job_data)
@@ -704,8 +703,7 @@ def _process_meal_plan_job(db: Session, job: Any, job_data: Dict[str, Any]) -> N
 
 def _process_url_job(db: Session, job: Any) -> None:
     """Process a URL parsing job. All exceptions are caught and handled gracefully."""
-    settings = get_settings()
-    max_retries = settings.llm_recipe_queue_max_retries
+    max_retries = get_settings_service().get_int("queue.max_retries", 3)
     
     try:
         result = asyncio.run(url_recipe_parser.parse_recipe_from_url(job.url, job.use_llm_fallback))
