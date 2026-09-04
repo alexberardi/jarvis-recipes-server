@@ -508,6 +508,276 @@ class TestVerificationAcceptsBothAlgorithms:
         assert exc.value.status_code == 401
 
 
+class TestRs256PublicKeyFetch:
+    """`_rs256_public_key()` — the RS256 path's only external dependency.
+
+    Every other test in this file monkeypatches `_public_key_cache` directly, so
+    the fetch itself, its caching and its error handling were never executed.
+    That matters more than the line count suggests: this function decides
+    whether an RS256 token can be verified at all, and every one of its failure
+    modes has to end in a 401 rather than an accept or a 500.
+
+    Note the two failure paths are NOT symmetric. A reachable jarvis-auth that
+    answers badly (500, junk body, missing field) is swallowed here and returns
+    None. An *undiscoverable* jarvis-auth is not: `service_config.get_auth_url()`
+    raises ValueError and this function does not catch it, so the error unwinds
+    into `get_current_user`, whose `except (JWTError, ValueError)` turns it into
+    the 401. Both fail closed; only one of them fails closed here.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self, monkeypatch):
+        """The cache is a module global and would otherwise leak across tests."""
+        from jarvis_recipes.app.api import deps as deps_module
+
+        monkeypatch.setattr(deps_module, "_public_key_cache", None)
+
+    @staticmethod
+    def _fake_httpx(monkeypatch, *, json_body=None, status_error=None,
+                    transport_error=None, json_error=None):
+        """Install a stand-in httpx.Client and return the list of fetched URLs."""
+        import httpx
+
+        from jarvis_recipes.app.api import deps as deps_module
+
+        calls: list[str] = []
+
+        class _Response:
+            def raise_for_status(self):
+                if status_error is not None:
+                    raise httpx.HTTPStatusError(
+                        "boom", request=None, response=None
+                    )
+
+            def json(self):
+                if json_error is not None:
+                    raise json_error
+                return json_body
+
+        class _Client:
+            def __init__(self, *a, **kw):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def get(self, url):
+                calls.append(url)
+                if transport_error is not None:
+                    raise transport_error
+                return _Response()
+
+        monkeypatch.setattr(deps_module.httpx, "Client", _Client)
+        return calls
+
+    def test_fetches_the_key_from_the_auth_service(self, monkeypatch):
+        from jarvis_recipes.app.api import deps as deps_module
+
+        monkeypatch.setattr(
+            deps_module.service_config, "get_auth_url", lambda: "http://auth.invalid"
+        )
+        calls = self._fake_httpx(monkeypatch, json_body={"public_key": "PEM-DATA"})
+
+        assert deps_module._rs256_public_key() == "PEM-DATA"
+        assert calls == ["http://auth.invalid/auth/public-key"]
+
+    def test_trailing_slash_does_not_double_up(self, monkeypatch):
+        from jarvis_recipes.app.api import deps as deps_module
+
+        monkeypatch.setattr(
+            deps_module.service_config, "get_auth_url", lambda: "http://auth.invalid/"
+        )
+        calls = self._fake_httpx(monkeypatch, json_body={"public_key": "PEM-DATA"})
+
+        deps_module._rs256_public_key()
+        assert calls == ["http://auth.invalid/auth/public-key"]
+
+    def test_the_key_is_fetched_once_and_then_cached(self, monkeypatch):
+        from jarvis_recipes.app.api import deps as deps_module
+
+        monkeypatch.setattr(
+            deps_module.service_config, "get_auth_url", lambda: "http://auth.invalid"
+        )
+        calls = self._fake_httpx(monkeypatch, json_body={"public_key": "PEM-DATA"})
+
+        assert deps_module._rs256_public_key() == "PEM-DATA"
+        assert deps_module._rs256_public_key() == "PEM-DATA"
+        assert len(calls) == 1, "second call must come from the cache"
+
+    def test_a_cached_key_survives_jarvis_auth_going_down(self, monkeypatch):
+        """The stated reason for caching: a RUNNING service keeps verifying."""
+        import httpx
+
+        from jarvis_recipes.app.api import deps as deps_module
+
+        monkeypatch.setattr(
+            deps_module.service_config, "get_auth_url", lambda: "http://auth.invalid"
+        )
+        self._fake_httpx(monkeypatch, json_body={"public_key": "PEM-DATA"})
+        assert deps_module._rs256_public_key() == "PEM-DATA"
+
+        # jarvis-auth now refuses every connection.
+        self._fake_httpx(monkeypatch, transport_error=httpx.ConnectError("down"))
+        assert deps_module._rs256_public_key() == "PEM-DATA"
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            "http-500",
+            "connection-refused",
+            "timeout",
+            "malformed-body",
+            "no-public_key-field",
+            "null-public_key",
+        ],
+    )
+    def test_every_bad_answer_yields_no_key(self, monkeypatch, failure):
+        """None, never a partial key and never an exception out of this call."""
+        import httpx
+
+        from jarvis_recipes.app.api import deps as deps_module
+
+        kwargs = {
+            "http-500": {"status_error": True},
+            "connection-refused": {"transport_error": httpx.ConnectError("refused")},
+            "timeout": {"transport_error": httpx.ReadTimeout("slow")},
+            "malformed-body": {"json_error": ValueError("not json")},
+            "no-public_key-field": {"json_body": {}},
+            "null-public_key": {"json_body": {"public_key": None}},
+        }[failure]
+
+        monkeypatch.setattr(
+            deps_module.service_config, "get_auth_url", lambda: "http://auth.invalid"
+        )
+        self._fake_httpx(monkeypatch, **kwargs)
+
+        assert deps_module._rs256_public_key() is None
+
+    def test_a_failed_fetch_is_not_cached(self, monkeypatch):
+        """A cold start during an outage must recover once jarvis-auth returns."""
+        import httpx
+
+        from jarvis_recipes.app.api import deps as deps_module
+
+        monkeypatch.setattr(
+            deps_module.service_config, "get_auth_url", lambda: "http://auth.invalid"
+        )
+        self._fake_httpx(monkeypatch, transport_error=httpx.ConnectError("down"))
+        assert deps_module._rs256_public_key() is None
+
+        self._fake_httpx(monkeypatch, json_body={"public_key": "PEM-DATA"})
+        assert deps_module._rs256_public_key() == "PEM-DATA"
+
+    def test_undiscoverable_auth_service_propagates_rather_than_returning_none(
+        self, monkeypatch
+    ):
+        """Documents the asymmetry: this one is NOT swallowed here.
+
+        `get_auth_url()` is called before the try block, so no widening of the
+        except clause can catch it — only moving the call inside the try would.
+        `get_current_user` is what converts it to a 401; see the companion test
+        below.
+        """
+        from jarvis_recipes.app.api import deps as deps_module
+
+        def _boom():
+            raise ValueError("Cannot discover jarvis-auth")
+
+        monkeypatch.setattr(deps_module.service_config, "get_auth_url", _boom)
+
+        with pytest.raises(ValueError):
+            deps_module._rs256_public_key()
+
+
+class TestRs256FetchFailuresReachTheVerifierAs401:
+    """The fetch failures above, exercised through the actual dependency.
+
+    A 500 here would leak the outage to callers as a server error, and an accept
+    would be a straight authentication bypass.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self, monkeypatch):
+        from jarvis_recipes.app.api import deps as deps_module
+
+        monkeypatch.setattr(deps_module, "_public_key_cache", None)
+
+    @staticmethod
+    def _rs256_token() -> str:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from jose import jwt
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        private_pem = key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode()
+        return jwt.encode({"sub": "1", "email": "u1@example.com"}, private_pem,
+                          algorithm="RS256")
+
+    def test_cold_start_during_an_outage_is_a_401(self, auth_settings, monkeypatch):
+        import httpx
+        from fastapi import HTTPException
+        from fastapi.security import HTTPAuthorizationCredentials
+
+        from jarvis_recipes.app.api import deps as deps_module
+
+        monkeypatch.setattr(
+            deps_module.service_config, "get_auth_url", lambda: "http://auth.invalid"
+        )
+
+        class _Client:
+            def __init__(self, *a, **kw):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def get(self, url):
+                raise httpx.ConnectError("refused")
+
+        monkeypatch.setattr(deps_module.httpx, "Client", _Client)
+
+        with pytest.raises(HTTPException) as exc:
+            deps_module.get_current_user(
+                HTTPAuthorizationCredentials(
+                    scheme="Bearer", credentials=self._rs256_token()
+                )
+            )
+        assert exc.value.status_code == 401
+
+    def test_undiscoverable_auth_service_is_a_401_not_a_500(
+        self, auth_settings, monkeypatch
+    ):
+        """The ValueError path, end to end."""
+        from fastapi import HTTPException
+        from fastapi.security import HTTPAuthorizationCredentials
+
+        from jarvis_recipes.app.api import deps as deps_module
+
+        def _boom():
+            raise ValueError("Cannot discover jarvis-auth")
+
+        monkeypatch.setattr(deps_module.service_config, "get_auth_url", _boom)
+
+        with pytest.raises(HTTPException) as exc:
+            deps_module.get_current_user(
+                HTTPAuthorizationCredentials(
+                    scheme="Bearer", credentials=self._rs256_token()
+                )
+            )
+        assert exc.value.status_code == 401
+
+
+
 def test_every_get_settings_service_call_site_imports_it():
     """A missing import here is a NameError only the live route would surface.
 
