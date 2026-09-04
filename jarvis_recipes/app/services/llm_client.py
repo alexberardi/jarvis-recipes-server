@@ -5,10 +5,35 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from jarvis_recipes.app.core import service_config
 from jarvis_recipes.app.core.config import get_settings
 from jarvis_recipes.app.schemas.ingestion import RecipeDraft
+from jarvis_recipes.app.services.settings_service import get_settings_service
 
 logger = logging.getLogger(__name__)
+
+
+def _llm_base_url() -> str:
+    """Resolve the llm-proxy base URL, preferring service discovery.
+
+    Discovery wins so repointing jarvis-llm-proxy-api in config-service takes
+    effect here. Its env fallback is JARVIS_LLM_PROXY_API_URL, which this service
+    has never used, so a discovery miss falls back to the legacy LLM_BASE_URL
+    rather than breaking every existing deployment.
+    """
+    try:
+        if service_config.is_initialized():
+            return service_config.get_llm_proxy_url()
+    except ValueError as exc:
+        logger.debug("llm-proxy not discoverable (%s), falling back to LLM_BASE_URL", exc)
+
+    base_url = get_settings().llm_base_url
+    if not base_url:
+        raise ValueError(
+            "LLM proxy URL is not configured. Register jarvis-llm-proxy-api in "
+            "config-service (JARVIS_CONFIG_URL) or set LLM_BASE_URL."
+        )
+    return base_url
 
 
 # Remove ASCII control chars that frequently break json.loads (except \n, \r, \t)
@@ -312,9 +337,8 @@ def _try_local_json_repair(raw: str) -> Optional[str]:
 
 
 async def _repair_json_via_full_llm(broken_json: str, schema_hint: str, timeout_seconds: int = 60) -> Optional[str]:
-    settings = get_settings()
     payload = {
-        "model": settings.llm_full_model_name or "live",
+        "model": get_settings_service().get_str("llm.full_model_name", "live"),
         "temperature": 0.0,
         "response_format": {"type": "json_object"},
         "messages": [
@@ -333,7 +357,7 @@ async def _repair_json_via_full_llm(broken_json: str, schema_hint: str, timeout_
     timeout = httpx.Timeout(timeout_seconds, read=timeout_seconds, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(
-            f"{settings.llm_base_url}/v1/chat/completions",
+            f"{_llm_base_url()}/v1/chat/completions",
             json=payload,
             headers=_headers(),
         )
@@ -418,13 +442,12 @@ async def clean_and_validate_draft(draft: RecipeDraft, model_name: str) -> Recip
     Returns:
         Cleaned RecipeDraft
     """
-    settings = get_settings()
     
     # Convert draft to JSON for the LLM
     draft_json = draft.model_dump(mode="json")
     
     payload = {
-        "model": model_name or settings.llm_lightweight_model_name or "live",
+        "model": model_name or get_settings_service().get_str("llm.lightweight_model_name", "live"),
         "temperature": 0.0,
         "response_format": {"type": "json_object"},
         "messages": [
@@ -453,7 +476,7 @@ async def clean_and_validate_draft(draft: RecipeDraft, model_name: str) -> Recip
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
-                f"{settings.llm_base_url}/v1/chat/completions",
+                f"{_llm_base_url()}/v1/chat/completions",
                 json=payload,
                 headers=_headers(),
             )
@@ -499,9 +522,8 @@ async def clean_and_validate_draft(draft: RecipeDraft, model_name: str) -> Recip
 
 
 async def call_text_structuring(text: str, model_name: str) -> RecipeDraft:
-    settings = get_settings()
     payload = {
-        "model": model_name or settings.llm_full_model_name or "live",
+        "model": model_name or get_settings_service().get_str("llm.full_model_name", "live"),
         "temperature": 0.0,
         "response_format": {"type": "json_object"},
         "messages": [
@@ -530,7 +552,7 @@ async def call_text_structuring(text: str, model_name: str) -> RecipeDraft:
     timeout = httpx.Timeout(60.0, read=60.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(
-            f"{settings.llm_base_url}/v1/chat/completions",
+            f"{_llm_base_url()}/v1/chat/completions",
             json=payload,
             headers=_headers(),
         )
@@ -579,7 +601,6 @@ async def call_meal_plan_select(
             "warnings": [str]
         }
     """
-    settings = get_settings()
     
     # Build candidate summaries (limit detail for token efficiency)
     candidate_summaries = [
@@ -629,7 +650,7 @@ async def call_meal_plan_select(
     )
     
     payload = {
-        "model": model_name or settings.llm_full_model_name or "live",
+        "model": model_name or get_settings_service().get_str("llm.full_model_name", "live"),
         "temperature": 0.2,
         "response_format": {"type": "json_object"},
         "messages": [
@@ -645,7 +666,7 @@ async def call_meal_plan_select(
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
-                f"{settings.llm_base_url}/v1/chat/completions",
+                f"{_llm_base_url()}/v1/chat/completions",
                 json=payload,
                 headers=_headers(),
             )

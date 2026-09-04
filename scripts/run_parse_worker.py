@@ -12,7 +12,11 @@ import time
 
 from sqlalchemy.orm import Session
 
-from jarvis_recipes.app.core.config import get_settings
+from jarvis_recipes.app.core.logging_config import (
+    setup_console_logging,
+    setup_remote_logging,
+    shutdown_remote_logging,
+)
 from jarvis_recipes.app.db.session import SessionLocal
 from jarvis_recipes.app.services import parse_job_service, url_recipe_parser
 from jarvis_recipes.app.services import meal_plan_service
@@ -20,16 +24,17 @@ from jarvis_recipes.app.schemas.meal_plan import MealPlanGenerateRequest
 from jarvis_recipes.app.schemas.ingestion_input import IngestionInput
 from jarvis_recipes.app.services.ingestion_service import parse_recipe as parse_recipe_ingestion
 from jarvis_recipes.app.services.image_ingest_worker import process_image_ingestion_job
+from jarvis_recipes.app.services.settings_service import get_settings_service
 
-logging.basicConfig(level=logging.INFO)
+setup_console_logging()
+setup_remote_logging()
 logger = logging.getLogger("parse_worker")
 
 POLL_INTERVAL_SECONDS = 5
 
 
 def process_one(db: Session) -> bool:
-    settings = get_settings()
-    max_retries = settings.llm_recipe_queue_max_retries
+    max_retries = get_settings_service().get_int("queue.max_retries", 3)
     job = (
         parse_job_service.fetch_next_pending(db, job_type="ingestion")
         or parse_job_service.fetch_next_pending(db, job_type="image")
@@ -145,7 +150,6 @@ def process_one(db: Session) -> bool:
 
 
 def main():
-    settings = get_settings()
     cleanup_interval = 60  # seconds
     last_cleanup = 0
     while True:
@@ -154,7 +158,10 @@ def main():
             now = time.time()
             if now - last_cleanup > cleanup_interval:
                 try:
-                    abandoned = parse_job_service.abandon_stale_jobs(db, settings.recipe_parse_job_abandon_minutes)
+                    abandon_minutes = get_settings_service().get_int(
+                        "parse_job.abandon_minutes", 4320
+                    )
+                    abandoned = parse_job_service.abandon_stale_jobs(db, abandon_minutes)
                     if abandoned:
                         logger.info("Marked %s jobs as ABANDONED", abandoned)
                     cleaned, abandoned_jobs = meal_plan_service.cleanup_expired_stage_recipes(db, cutoff_hours=72, mark_jobs=True)
@@ -168,5 +175,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        shutdown_remote_logging()
 

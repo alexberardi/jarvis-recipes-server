@@ -18,9 +18,15 @@ from rq import Worker
 from rq.connections import push_connection
 
 from jarvis_recipes.app.core.config import get_settings
+from jarvis_recipes.app.core.logging_config import (
+    setup_console_logging,
+    setup_remote_logging,
+    shutdown_remote_logging,
+)
 from jarvis_recipes.app.services.queue_service import get_redis_connection
 
-logging.basicConfig(level=logging.INFO)
+setup_console_logging()
+setup_remote_logging()
 logger = logging.getLogger("rq_worker")
 
 # Queue names to listen to (per PRD queue-flow.md)
@@ -80,5 +86,8 @@ def main():
 
 if __name__ == "__main__":
     setup_cleanup()
-    main()
+    try:
+        main()
+    finally:
+        shutdown_remote_logging()
 

@@ -9,6 +9,11 @@ services:
     environment:
       - JARVIS_CONFIG_URL=http://host.docker.internal:7700
       - JARVIS_CONFIG_URL_STYLE=dockerized
+      # Passed through from the shell when set, otherwise .env supplies them.
+      - JARVIS_APP_ID
+      - JARVIS_APP_KEY
+      - JARVIS_LOG_CONSOLE_LEVEL
+      - JARVIS_LOG_REMOTE_LEVEL
       - REDIS_HOST=host.docker.internal
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
@@ -36,6 +41,11 @@ services:
       - .env
     environment:
       - JARVIS_CONFIG_URL_STYLE=dockerized
+      # Passed through from the shell when set, otherwise .env supplies them.
+      - JARVIS_APP_ID
+      - JARVIS_APP_KEY
+      - JARVIS_LOG_CONSOLE_LEVEL
+      - JARVIS_LOG_REMOTE_LEVEL
       - REDIS_HOST=host.docker.internal
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}

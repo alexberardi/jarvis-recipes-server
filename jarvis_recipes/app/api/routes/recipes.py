@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from urllib.parse import urlparse
 
 from jarvis_recipes.app.api.deps import get_current_user, get_db_session
-from jarvis_recipes.app.core.config import get_settings
 from jarvis_recipes.app.schemas.auth import CurrentUser
 from jarvis_recipes.app.schemas.recipe import RecipeCreate, RecipeRead, RecipeUpdate
 from jarvis_recipes.app.services import recipes_service
@@ -19,6 +18,7 @@ from jarvis_recipes.app.services import url_recipe_parser
 from jarvis_recipes.app.db import models
 from jarvis_recipes.app.schemas.parse_job import ParseJobCreate, ParseJobStatus
 from jarvis_recipes.app.services import parse_job_service
+from jarvis_recipes.app.services.settings_service import get_settings_service
 from jarvis_recipes.app.services.url_recipe_parser import preflight_validate_url
 from jarvis_recipes.app.db import models as db_models
 from jarvis_recipes.app.services import static_recipe_service
@@ -290,8 +290,8 @@ def list_parse_jobs(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    settings = get_settings()
-    cutoff_dt = datetime.utcnow() - timedelta(minutes=settings.recipe_parse_job_abandon_minutes)
+    abandon_minutes = get_settings_service().get_int("parse_job.abandon_minutes", 4320)
+    cutoff_dt = datetime.utcnow() - timedelta(minutes=abandon_minutes)
 
     query = (
         db.query(db_models.RecipeParseJob)
