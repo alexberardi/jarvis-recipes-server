@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import uuid
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session
@@ -16,11 +17,14 @@ from jarvis_recipes.app.db.session import SessionLocal
 from jarvis_recipes.app.schemas.ingestion_input import IngestionInput
 from jarvis_recipes.app.schemas.meal_plan import MealPlanGenerateRequest
 from jarvis_recipes.app.db import models
-from jarvis_recipes.app.services import mailbox_service, meal_plan_service, parse_job_service, url_recipe_parser
+from jarvis_recipes.app.schemas.auth import CurrentUser
+from jarvis_recipes.app.services import mailbox_service, meal_plan_service, ocr_join, parse_job_service, url_recipe_parser
 from jarvis_recipes.app.services.image_ingest_worker import process_image_ingestion_job
 from jarvis_recipes.app.services.ingestion_service import parse_recipe as parse_recipe_ingestion
 from jarvis_recipes.app.services import ocr_quality
+from jarvis_recipes.app.services import llm_client
 from jarvis_recipes.app.services.llm_client import call_text_structuring, clean_and_validate_draft
+from jarvis_recipes.app.services import queue_service
 from jarvis_recipes.app.services.queue_service import enqueue_job
 from jarvis_recipes.app.services.settings_service import get_settings_service
 
@@ -60,9 +64,13 @@ def process_job(payload_json: str) -> None:
             try:
                 # For ocr.completed events, use workflow_id or parent_job_id to find the original job
                 # (job_id is a new UUID created by OCR service)
-                if job_type == "ocr.completed":
+                if job_type in ("ocr.completed", "ocr.join_deadline"):
+                    # Both carry a job_id of their own -- OCR mints a fresh uuid
+                    # for a completion, and the deadline timer uses a derived id
+                    # so repeated scheduling collapses to one. Neither names a
+                    # RecipeParseJob; the workflow does.
                     lookup_id = workflow_id or parent_job_id or job_id
-                    logger.debug("OCR completion event: looking up job by workflow_id/parent_job_id: %s", lookup_id)
+                    logger.debug("%s: looking up job by workflow_id/parent_job_id: %s", job_type, lookup_id)
                 else:
                     lookup_id = job_id
                 
@@ -99,6 +107,10 @@ def process_job(payload_json: str) -> None:
                         _process_ingestion_job(db, job, payload)
                     elif job_type == "meal_plan_generate":
                         _process_meal_plan_job(db, job, payload)
+                    elif job_type == "grocery_match":
+                        _process_grocery_match_job(db, job, payload)
+                    elif job_type == "ocr.join_deadline":
+                        _process_ocr_join_deadline(db, job, payload, workflow_id)
                     else:
                         logger.error("Unknown job type in envelope: %s", job_type)
                         parse_job_service.mark_error(db, job, "unknown_job_type", f"Unknown job type: {job_type}")
@@ -156,6 +168,8 @@ def process_job(payload_json: str) -> None:
                         _process_meal_plan_job(db, job, job_data)
                     elif job_type == "url":
                         _process_url_job(db, job)
+                    elif job_type == "grocery_match":
+                        _process_grocery_match_job(db, job, job_data)
                     else:
                         logger.error("Unknown job type: %s", job_type)
                         parse_job_service.mark_error(db, job, "unknown_job_type", f"Unknown job type: {job_type}")
@@ -196,6 +210,45 @@ def process_job(payload_json: str) -> None:
                             pass
             except Exception as db_exc:
                 logger.exception("Failed to create database session to mark job %s as error: %s", job_id, db_exc)
+
+
+def _ingestion_for(db: Session, job: Any) -> Optional[Any]:
+    """The RecipeIngestion this job is extracting into."""
+    ingestion_id = (job.job_data or {}).get("ingestion_id")
+    if not ingestion_id:
+        logger.error("Missing ingestion_id in job data for job %s", job.id)
+        return None
+    return db.get(models.RecipeIngestion, ingestion_id)
+
+
+def _process_ocr_join_deadline(
+    db: Session, job: Any, payload: Dict[str, Any], workflow_id: Optional[str]
+) -> None:
+    """Release a join that is still waiting for hosts that have not answered.
+
+    Fires once per workflow, `ocr_join_timeout_seconds` after the first reading
+    arrived. Usually a no-op: if every host answered, the last one already
+    claimed the join and continued.
+    """
+    ingestion = _ingestion_for(db, job)
+    if ingestion is None:
+        return
+
+    if not (ingestion.ocr_readings or []):
+        # Nothing came back at all. Not this handler's problem to report -- the
+        # job is still PENDING and the stale-job reaper owns that case -- but
+        # worth saying so, because it means every OCR host is down.
+        logger.warning("OCR join deadline for %s: no host answered", workflow_id)
+        return
+
+    if not ocr_join.claim(db, ingestion.id):
+        logger.debug("OCR join deadline for %s: already released", workflow_id)
+        return
+
+    logger.info(
+        "OCR join deadline for %s: continuing with %s", workflow_id, ocr_join.describe(ingestion)
+    )
+    _structure_from_readings(db, job, ingestion)
 
 
 def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], parent_job_id: Optional[str]) -> None:
@@ -292,40 +345,86 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
             logger.info("Job %s was canceled during OCR processing, aborting", job.id)
             return
         
-        # Combine all OCR text with double newline separator
-        combined_text = "\n\n".join(ocr_texts)
-        
-        if not combined_text:
-            error_message = "No OCR text extracted from any successful image"
-            if failed_results:
-                error_message += f" ({len(failed_results)} image(s) failed)"
-            parse_job_service.mark_error(db, job, "ocr_no_text", error_message)
-            return
-        
-        # Calculate mean confidence across successful images only
-        confidences = [meta.get("confidence", 0.0) for meta in all_metas if meta.get("confidence") is not None]
-        mean_confidence = sum(confidences) / len(confidences) if confidences else None
-        
-        # Get provider/tier info (use first successful result's tier for logging)
-        tier = all_metas[0].get("tier", "unknown") if all_metas else "unknown"
-        
-        # Get ingestion from job data
+        # One host has answered. Record it and see whether to wait for the others.
         job_data = job.job_data or {}
-        logger.debug("Job data for job %s: %s", job.id, job_data)
         ingestion_id = job_data.get("ingestion_id")
         if not ingestion_id:
             logger.error("Missing ingestion_id in job data for job %s. Job data: %s", job.id, job_data)
             parse_job_service.mark_error(db, job, "invalid_job_data", "Missing ingestion_id in job data")
             return
-        
-        logger.info("Looking up ingestion %s for job %s", ingestion_id, job.id)
+
         ingestion = db.get(models.RecipeIngestion, ingestion_id)
         if not ingestion:
             logger.error("Ingestion %s not found for job %s", ingestion_id, job.id)
             parse_job_service.mark_error(db, job, "invalid_ingestion", "Ingestion not found")
             return
-        logger.info("Found ingestion %s for job %s", ingestion_id, job.id)
-        
+
+        count = ocr_join.record_reading(db, ingestion, sorted_results)
+        expected = ingestion.ocr_expected or 1
+        logger.info(
+            "OCR reading %d/%d for job %s from %s", count, expected, job.id, ocr_join.describe(ingestion)
+        )
+
+        if not ocr_join.is_complete(ingestion):
+            # Hold for the slower hosts. The deadline timer releases the join if
+            # they never answer -- scheduled on every arrival, under one
+            # deterministic id, so it exists even if the first arrival raced it.
+            queue_service.schedule_join_deadline(job.id, ingestion.id)
+            return
+
+        if not ocr_join.claim(db, ingestion.id):
+            # The deadline fired first and already continued. Our reading is
+            # recorded either way; it simply arrived too late to be used.
+            logger.info("OCR join for job %s already released; discarding late reading", job.id)
+            return
+
+        _structure_from_readings(db, job, ingestion)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Unhandled error in OCR completion for job %s: %s", job.id, exc)
+        try:
+            db.rollback()
+            parse_job_service.mark_error(db, job, "ocr_completion_error", str(exc))
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not mark job %s failed", job.id)
+
+
+def _structure_from_readings(db: Session, job: Any, ingestion: Any) -> None:
+    """Continue the pipeline once the OCR readings are in.
+
+    Reached from the last arriving reading or from the deadline timer, never
+    both -- ocr_join.claim decides.
+    """
+    try:
+        job_data = job.job_data or {}
+        readings = ocr_join.readings_for_llm(ingestion)
+
+        # (provider, text) per host, empty readings dropped: a host that answered
+        # with nothing should not become a blank block in the prompt.
+        texts = [(r.get("provider") or "", ocr_join.combine(r.get("results") or [])) for r in readings]
+        texts = [(provider, text) for provider, text in texts if text.strip()]
+
+        if not texts:
+            parse_job_service.mark_error(
+                db, job, "ocr_no_text", "No OCR text extracted from any image"
+            )
+            ingestion.status = "FAILED"
+            db.commit()
+            return
+
+        all_metas = [
+            result.get("meta", {})
+            for reading in readings
+            for result in (reading.get("results") or [])
+        ]
+        confidences = [m.get("confidence") for m in all_metas if m.get("confidence") is not None]
+        mean_confidence = sum(confidences) / len(confidences) if confidences else None
+        tier = texts[0][0] or "unknown"
+
+        # The gate judges the BEST reading, not the concatenation. Asking "is any
+        # engine's reading good enough to be worth the LLM?" is the real question;
+        # concatenating lets one engine's mush drag a good reading below the line.
+        combined_text = max((t for _, t in texts), key=lambda t: len(t.split()))
+
         ingestion.status = "RUNNING"
         try:
             db.commit()
@@ -346,8 +445,28 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
         
         if quality_result["hard_fail"] or not quality_result["pass_gate"]:
             error_code = "quality_gate_failed"
-            error_message = f"OCR quality insufficient: char_count={quality_result['char_count']}, gibberish={quality_result['gibberish']}"
-            logger.warning("Quality gate failed for job %s: %s", job.id, error_message)
+            # What the PERSON sees. "char_count=256, gibberish=True" is a true
+            # description of the measurement and useless to someone holding a
+            # phone: it reads as a bug in the app rather than a limit of the
+            # engines. The commonest cause by far is handwriting -- the installed
+            # providers are printed-text OCR and produce mush on cursive -- and
+            # the useful next step is typing it in, which the app already offers.
+            # The metrics stay in the log and in pipeline_json for debugging.
+            error_message = (
+                "Couldn't read enough text from this photo. Handwritten recipes, "
+                "angled shots and low light are the usual culprits — try a "
+                "straight-on photo in good light, or enter it by hand."
+            )
+            logger.warning(
+                "Quality gate failed for job %s: char_count=%s line_count=%s "
+                "token_count=%s gibberish=%s alpha_ratio=%.2f",
+                job.id,
+                quality_result.get("char_count"),
+                quality_result.get("line_count"),
+                quality_result.get("token_count"),
+                quality_result.get("gibberish"),
+                quality_result.get("alpha_ratio", 0.0),
+            )
             parse_job_service.mark_error(db, job, error_code, error_message)
             ingestion.status = "FAILED"
             ingestion.pipeline_json = {
@@ -371,10 +490,17 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
         lightweight_model = get_settings_service().get_str("llm.lightweight_model_name", "live")
         tier_max = job_data.get("tier_max") or ingestion.tier_max or 3
         
-        logger.info("Calling LLM text structuring for job %s with model %s (text_length=%d)", 
-                   job.id, lightweight_model, len(combined_text))
+        logger.info(
+            "Calling LLM text structuring for job %s with model %s (%d reading(s): %s)",
+            job.id,
+            lightweight_model,
+            len(texts),
+            ", ".join(p or "?" for p, _ in texts),
+        )
         try:
-            draft = asyncio.run(call_text_structuring(combined_text, lightweight_model))
+            draft = asyncio.run(
+                call_text_structuring(combined_text, lightweight_model, readings=texts)
+            )
             logger.info("LLM text structuring completed for job %s: draft=%s", job.id, "present" if draft else "None")
             
             if draft:
@@ -449,20 +575,35 @@ def _process_ocr_completed(db: Session, job: Any, payload: Dict[str, Any], paren
                 
                 # Success - create recipe draft
                 ingestion.status = "SUCCEEDED"
+                # One attempt per ENGINE that answered, rather than the single
+                # entry this used to write. With a fan-out there is no "the"
+                # provider any more, and which engines were reconciled is the
+                # first thing anyone debugging a wrong import wants to know.
                 ingestion.pipeline_json = {
-                    "attempts": [{
-                        "tier": 1,
-                        "status": "success",
-                        "metrics": quality_result,
-                        "provider": tier,  # Use tier from first successful result
-                        "image_count": len(results),
-                        "successful_images": len(successful_results),
-                        "failed_images": len(failed_results),
-                        "per_image_errors": [
-                            {"index": r["index"], "code": r["error"].get("code"), "message": r["error"].get("message")}
-                            for r in failed_results
-                        ] if failed_results else None,
-                    }],
+                    "attempts": [
+                        {
+                            "tier": 1,
+                            "status": "success",
+                            "provider": reading.get("provider"),
+                            "image_count": len(reading.get("results") or []),
+                            "failed_images": sum(
+                                1 for r in (reading.get("results") or []) if r.get("error")
+                            ),
+                            "per_image_errors": [
+                                {
+                                    "index": r.get("index"),
+                                    "code": (r.get("error") or {}).get("code"),
+                                    "message": (r.get("error") or {}).get("message"),
+                                }
+                                for r in (reading.get("results") or [])
+                                if r.get("error")
+                            ]
+                            or None,
+                        }
+                        for reading in readings
+                    ],
+                    "metrics": quality_result,
+                    "providers_used": [p for p, _ in texts],
                     "selected_tier": 1,
                 }
                 try:
@@ -671,7 +812,11 @@ def _process_meal_plan_job(db: Session, job: Any, job_data: Dict[str, Any]) -> N
         return
     
     try:
-        result, slot_failures = meal_plan_service.generate_meal_plan(db, job.user_id, req, request_id)
+        # No token out here -- the request that queued this finished long ago --
+        # so the caller is rebuilt from the job row, which carries the household
+        # precisely so candidate search can see the family's box.
+        job_user = CurrentUser(id=int(job.user_id), household_id=job.household_id)
+        result, slot_failures = meal_plan_service.generate_meal_plan(db, job_user, req, request_id)
         try:
             meal_plan_service.publish_completed(db, job.user_id, request_id, result, slot_failures)
         except Exception as publish_exc:
@@ -746,3 +891,69 @@ def _process_url_job(db: Session, job: Any) -> None:
         except Exception as mark_exc:
             logger.exception("Failed to mark job %s as error after crash: %s", job.id, mark_exc)
 
+
+def _process_grocery_match_job(db, job, job_data):
+    """Learn grocery aliases for ingredients the map had never seen.
+
+    Nothing is waiting on this: the cart link was returned to the client the
+    moment the deterministic pass finished. Its whole purpose is that the SAME
+    list next week needs no picker.
+
+    The worker holds no token, so the household is rebuilt from the job row --
+    the same reason `household_id` is carried on RecipeParseJob at all. Without
+    it the candidate list would be scoped to the authoring user and a housemate's
+    saved products would be invisible to the pass.
+    """
+    from jarvis_recipes.app.services import grocery_service
+
+    data = job_data or job.job_data or {}
+    retailer = data.get("retailer", "walmart")
+    unmatched = [n for n in (data.get("unmatched") or []) if isinstance(n, str)]
+    if not unmatched:
+        parse_job_service.mark_error(db, job, "empty_job", "No ingredients to match")
+        return
+
+    user = CurrentUser(id=int(job.user_id), household_id=job.household_id)
+    candidates = grocery_service.list_map(db, user, retailer)
+    if not candidates:
+        # Raced with the map being emptied. Nothing to match against, and
+        # inventing a SKU is the failure mode this whole design avoids.
+        _mark_grocery_complete(db, job, learned=[], attempted=unmatched)
+        return
+
+    messages = grocery_service.build_match_prompt(candidates, unmatched)
+    matches = asyncio.run(llm_client.match_grocery_items(messages))
+    learned = grocery_service.apply_matches(db, user, matches, retailer)
+
+    logger.info(
+        "Grocery match job %s: %d/%d ingredients learned",
+        job.id,
+        len(learned),
+        len(unmatched),
+    )
+    _mark_grocery_complete(db, job, learned=learned, attempted=unmatched)
+
+
+def _mark_grocery_complete(db, job, learned, attempted):
+    """Finish a grocery job.
+
+    Not parse_job_service.mark_complete: that takes a ParseResult and writes a
+    recipe-shaped payload. This job produces neither.
+    """
+    job.status = parse_job_service.RecipeParseJobStatus.COMPLETE.value
+    job.result_json = {
+        "learned": [
+            {"ingredient_name": m.ingredient_name, "sku": m.sku, "product_name": m.product_name}
+            for m in learned
+        ],
+        "attempted": attempted,
+        # Zero learned is a legitimate outcome, not a failure: the model is meant
+        # to decline when nothing in the map is the same grocery item.
+        "unresolved": [
+            name
+            for name in attempted
+            if name not in {m.ingredient_name for m in learned}
+        ],
+    }
+    job.completed_at = datetime.utcnow()
+    db.commit()

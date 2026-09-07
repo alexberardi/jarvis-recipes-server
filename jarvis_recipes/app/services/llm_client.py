@@ -17,13 +17,19 @@ def _llm_base_url() -> str:
     """Resolve the llm-proxy base URL, preferring service discovery.
 
     Discovery wins so repointing jarvis-llm-proxy-api in config-service takes
-    effect here. Its env fallback is JARVIS_LLM_PROXY_API_URL, which this service
-    has never used, so a discovery miss falls back to the legacy LLM_BASE_URL
-    rather than breaking every existing deployment.
+    effect here, with JARVIS_LLM_PROXY_API_URL as its env fallback and the legacy
+    LLM_BASE_URL after that.
+
+    NOT gated on service_config.is_initialized(). init() runs in main.py's startup
+    event, which the RQ worker never executes -- and the worker is what generates
+    meal plans. Gating here meant the worker skipped resolution entirely and fell
+    through to an empty LLM_BASE_URL, so every slot came back "LLM unavailable,
+    using deterministic selection" while the API container was perfectly happy.
+    get_llm_proxy_url() handles the uninitialised case itself: it falls back to the
+    env var and raises ValueError only when neither is available.
     """
     try:
-        if service_config.is_initialized():
-            return service_config.get_llm_proxy_url()
+        return service_config.get_llm_proxy_url()
     except ValueError as exc:
         logger.debug("llm-proxy not discoverable (%s), falling back to LLM_BASE_URL", exc)
 
@@ -521,7 +527,56 @@ async def clean_and_validate_draft(draft: RecipeDraft, model_name: str) -> Recip
         return draft
 
 
-async def call_text_structuring(text: str, model_name: str) -> RecipeDraft:
+# Added to the system prompt when the model is shown more than one reading.
+# The readings are NOT peers, and saying so is what keeps the weaker engine's
+# mistakes out. Measured on a handwritten card: given both readings as equals the
+# model added parsley, sage and rosemary -- printed beside an illustration on the
+# stationery -- in 12 of 12 runs, because rapidocr reads that caption cleanly
+# while garbling the recipe. Told to take the list from the best reading and use
+# the rest only to settle ambiguity, the same card came back clean in 2 of 3.
+_ENSEMBLE_RULES = (
+    "- You are given SEVERAL independent OCR readings of the SAME image, IN ORDER "
+    "OF RELIABILITY. READING 1 is from the most accurate engine.\n"
+    "- Take the LIST of ingredients and steps from READING 1.\n"
+    "- Use the later readings ONLY to settle something READING 1 left unclear: a "
+    "smudged quantity, an ambiguous unit, a word that could be two things. Where "
+    "they agree with READING 1, that is confirmation.\n"
+    "- NEVER add an ingredient or a step that appears only in a later reading. "
+    "The weaker engines often read decoration printed on the page -- tab labels, "
+    "a caption beside an illustration -- more clearly than they read the recipe.\n"
+)
+
+
+def _readings_message(readings: list[tuple[str, str]]) -> str:
+    """The user message for one or more OCR readings.
+
+    A single reading keeps the original wording exactly, so the common path --
+    one OCR host, a printed recipe -- is not quietly changed by this feature.
+    """
+    if len(readings) == 1:
+        return f"OCR TEXT (verbatim):\n<<<OCR_START>>>\n{readings[0][1]}\n<<<OCR_END>>>"
+
+    blocks = []
+    for index, (provider, text) in enumerate(readings, start=1):
+        label = provider or f"engine {index}"
+        blocks.append(f"OCR READING {index} ({label}):\n<<<R{index}_START>>>\n{text}\n<<<R{index}_END>>>")
+    return "\n\n".join(blocks)
+
+
+async def call_text_structuring(
+    text: str,
+    model_name: str,
+    readings: Optional[List[Tuple[str, str]]] = None,
+) -> RecipeDraft:
+    """Turn OCR text into a RecipeDraft.
+
+    `readings` is [(provider, text), ...] when several engines read the same
+    image; the model reconciles them. `text` remains the single-reading path and
+    is what is used when `readings` is None or holds one entry.
+    """
+    pairs = readings if readings else [("", text)]
+    ensemble = len(pairs) > 1
+
     payload = {
         "model": model_name or get_settings_service().get_str("llm.full_model_name", "live"),
         "temperature": 0.0,
@@ -539,11 +594,12 @@ async def call_text_structuring(text: str, model_name: str) -> RecipeDraft:
                     "- Put prep notes in 'notes' field\n"
                     "- Use 0 for unknown time fields, null for missing description\n"
                     "- If not a valid recipe, return {\"error\":\"garbage_ocr\"}\n"
+                    + (_ENSEMBLE_RULES if ensemble else "")
                 ),
             },
             {
                 "role": "user",
-                "content": f"OCR TEXT (verbatim):\n<<<OCR_START>>>\n{text}\n<<<OCR_END>>>",
+                "content": _readings_message(pairs),
             },
         ],
         "max_tokens": 1100,
@@ -772,3 +828,58 @@ async def call_meal_plan_select(
             "alternatives": [],
         }
 
+
+async def match_grocery_items(
+    messages: List[Dict[str, str]],
+    model_name: Optional[str] = None,
+    timeout_seconds: int = 120,
+) -> List[Dict[str, Any]]:
+    """Ask the background model to map ingredients onto saved grocery products.
+
+    Runs on the "background" slot, which the proxy routes to the larger, slower
+    model that is not holding the interactive session's context. That is the right
+    trade here: nobody is waiting on this -- the cart link is already in their hand
+    -- and the job is a judgement call ("is buttermilk butter?") where the bigger
+    model is worth the seconds.
+
+    Returns [] rather than raising on any failure. A grocery map that failed to
+    learn a new alias is a list with one more unmatched item on it; an exception
+    out of a background job is a job marked failed for something nobody asked for.
+    """
+    payload = {
+        "model": model_name or get_settings_service().get_str("llm.background_model_name", "background"),
+        "temperature": 0.0,
+        "response_format": {"type": "json_object"},
+        "messages": messages,
+        "max_tokens": 1500,
+        "stream": False,
+    }
+
+    try:
+        timeout = httpx.Timeout(float(timeout_seconds), read=float(timeout_seconds), connect=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{_llm_base_url()}/v1/chat/completions",
+                json=payload,
+                headers=_headers(),
+            )
+        resp.raise_for_status()
+        data = resp.json()
+
+        if isinstance(data, dict) and "error" in data:
+            logger.warning("LLM proxy error during grocery matching: %s", data["error"])
+            return []
+
+        content = data["choices"][0]["message"]["content"]
+        parsed = json.loads(_strip_invalid_control_chars(content))
+        matches = parsed.get("matches", [])
+        if not isinstance(matches, list):
+            logger.warning("Grocery matching returned a non-list 'matches': %r", type(matches))
+            return []
+        # Shape only. Whether an id is one this household may use is decided in
+        # grocery_service.apply_matches, against the database -- not here, and not
+        # by trusting that the model echoed back an id we sent it.
+        return [m for m in matches if isinstance(m, dict)]
+    except Exception as exc:
+        logger.warning("Grocery matching failed: %s", exc)
+        return []

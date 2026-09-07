@@ -126,7 +126,11 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
         user_id = int(sub)
         email = payload.get("email")
-        return CurrentUser(id=user_id, email=email)
+        # jarvis-auth puts household_id in every token (api/auth.py
+        # _build_jwt_claims); this service used to drop it on the floor and scope
+        # everything per user.
+        household_id = payload.get("household_id")
+        return CurrentUser(id=user_id, email=email, household_id=household_id)
     except (JWTError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
 

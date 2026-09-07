@@ -147,8 +147,11 @@ async def submit_recipe_from_image_job(
     for idx, s3_uri in enumerate(s3_uris):
         image_refs.append({"kind": "s3", "value": s3_uri, "index": idx})
     
-    # Enqueue directly to OCR queue (fast-path routing per PRD)
-    queue_service.enqueue_ocr_request(
+    # Fanned out to every OCR host; the readings are joined before the LLM sees
+    # them. `sent` is recorded on the ingestion so the join knows how many hosts
+    # to wait for -- reading it from config at join time would misbehave when
+    # config changes while a job is in flight.
+    sent = queue_service.enqueue_ocr_request(
         workflow_id=job.id,  # Use job.id as workflow_id for simple workflows
         job_id=job.id,
         image_refs=image_refs,
@@ -156,8 +159,11 @@ async def submit_recipe_from_image_job(
         request_id=None,  # Could add request_id from headers if available
     )
     
+    ingestion.ocr_expected = sent
+    db.commit()
+
     logger.info(
-        "queued from-image job to OCR queue",
-        extra={"user_id": str(current_user.id), "ingestion_id": ingestion_id, "job_id": job.id, "images": len(images)},
+        "queued from-image job to OCR queue(s)",
+        extra={"user_id": str(current_user.id), "ingestion_id": ingestion_id, "job_id": job.id, "images": len(images), "ocr_hosts": sent},
     )
     return {"ingestion_id": ingestion_id, "job_id": job.id}

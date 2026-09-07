@@ -80,7 +80,15 @@ class Recipe(Base):
     __tablename__ = "recipes"
 
     id = Column(Integer, primary_key=True, index=True)
+    # user_id is retained as AUTHORSHIP -- who added it -- while household_id is
+    # VISIBILITY. Keeping both means "added by Casey" survives, and the migration
+    # stays reversible: dropping household_id restores per-user scoping exactly.
     user_id = Column(String, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    # Nullable on purpose. Rows created before the migration have no household
+    # until the backfill runs, and this service cannot resolve a user's household
+    # on its own -- that lives in jarvis-auth. Until then they stay visible to
+    # their author via the NULL fallback in services/scoping.py.
+    household_id = Column(String(255), nullable=True, index=True)
     title = Column(String, nullable=False)
     description = Column(Text)
     image_url = Column(String)
@@ -142,6 +150,8 @@ class MealPlan(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(String, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    # See Recipe.household_id -- same authorship/visibility split.
+    household_id = Column(String(255), nullable=True, index=True)
     name = Column(String)
     start_date = Column(Date, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -163,6 +173,42 @@ class MealPlanItem(Base):
     recipe = relationship("Recipe", back_populates="plan_items")
 
 
+class GrocerySkuMap(Base):
+    """What this household buys when a recipe says "ground beef".
+
+    A shopping preference, not inventory -- which is why it lives here and not in
+    jarvis-pantry. Keyed on the NORMALIZED ingredient name so one row covers every
+    recipe's phrasing of the same thing.
+    """
+
+    __tablename__ = "grocery_sku_map"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String, nullable=False, index=True)
+    # See Recipe.household_id -- same authorship/visibility split.
+    household_id = Column(String(255), nullable=True, index=True)
+    retailer = Column(String(32), nullable=False, default="walmart")
+    ingredient_name = Column(String(255), nullable=False)
+    sku = Column(String(64), nullable=False)
+    product_name = Column(String(512), nullable=True)
+    unit_size = Column(String(64), nullable=True)
+    # "manual" beats "llm": a manual row is the household telling us what they
+    # buy, and a background guess must never overwrite that.
+    source = Column(String(16), nullable=False, default="manual")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "household_id",
+            "user_id",
+            "retailer",
+            "ingredient_name",
+            name="ux_grocery_sku_map_scope",
+        ),
+    )
+
+
 class RecipeParseJob(Base):
     __tablename__ = "recipe_parse_jobs"
 
@@ -181,6 +227,9 @@ class RecipeParseJob(Base):
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
     user_id = Column(String, nullable=False, index=True)
+    # The queue worker runs without a token, long after the request that started
+    # the job, so the household has to travel on the row. See the migration note.
+    household_id = Column(String(255), nullable=True, index=True)
     committed_at = Column(DateTime)
     abandoned_at = Column(DateTime)
     canceled_at = Column(DateTime)
@@ -207,6 +256,12 @@ class RecipeIngestion(Base):
     tier_max = Column(Integer, nullable=True)
     title_hint = Column(String, nullable=True)
     recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="SET NULL"), nullable=True)
+    # OCR ensemble join. One image goes to every OCR host, so the readings
+    # accumulate here until they can be handed to the LLM together. See
+    # services/ocr_join.
+    ocr_readings = Column(JSON, nullable=True)
+    ocr_expected = Column(Integer, nullable=True)
+    ocr_joined_at = Column(DateTime, nullable=True)
 
     user = relationship("User")
     recipe = relationship("Recipe")
@@ -227,7 +282,11 @@ class MailboxMessage(Base):
 class StageRecipe(Base):
     __tablename__ = "stage_recipes"
 
-    id = Column(String, primary_key=True, index=True)
+    # Integer, like every other recipe id here. It used to be a UUID string, and
+    # because staged and committed ids flow through the same fields
+    # (Selection.recipe_id, the mobile plan state, exclude_recipe_ids) that
+    # mismatch caused three separate bugs -- see migration f6a7b8c9d0e1.
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(String, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String, nullable=False)
     description = Column(Text)

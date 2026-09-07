@@ -60,7 +60,7 @@ def create_recipe(
         if job.status != parse_job_service.RecipeParseJobStatus.COMPLETE.value:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Parse job not ready")
 
-    recipe = recipes_service.create_recipe(db, current_user.id, payload)
+    recipe = recipes_service.create_recipe(db, current_user, payload)
 
     if parse_job_id:
         # Mark job as committed
@@ -75,7 +75,7 @@ def get_user_recipe(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    recipe = recipes_service.get_recipe(db, current_user.id, recipe_id)
+    recipe = recipes_service.get_recipe(db, current_user, recipe_id)
     if not recipe or recipe.user_id != str(current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipe not found")
     return recipe
@@ -83,7 +83,7 @@ def get_user_recipe(
 
 @router.get("/stage/{stage_id}")
 def get_stage_recipe(
-    stage_id: str,
+    stage_id: int,
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
@@ -93,7 +93,9 @@ def get_stage_recipe(
     if stage.expires_at <= datetime.utcnow():
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Stage recipe expired")
     return {
-        "id": stage.id,
+        # Stringified for consistency with Selection.recipe_id and the committed
+        # recipe payloads the client already handles.
+        "id": str(stage.id),
         "title": stage.title,
         "description": stage.description,
         "yield": stage.yield_text,
@@ -127,7 +129,7 @@ def list_recipes(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    return recipes_service.list_recipes(db, current_user.id)
+    return recipes_service.list_recipes(db, current_user)
 
 
 @router.get("/{recipe_id}", response_model=RecipeRead)
@@ -136,7 +138,7 @@ def get_recipe(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    return recipes_service.get_recipe(db, current_user.id, recipe_id)
+    return recipes_service.get_recipe(db, current_user, recipe_id)
 
 
 @router.patch("/{recipe_id}", response_model=RecipeRead)
@@ -146,7 +148,7 @@ def update_recipe(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    return recipes_service.update_recipe(db, current_user.id, recipe_id, payload)
+    return recipes_service.update_recipe(db, current_user, recipe_id, payload)
 
 
 @router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -155,7 +157,7 @@ def delete_recipe(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    recipes_service.delete_recipe(db, current_user.id, recipe_id)
+    recipes_service.delete_recipe(db, current_user, recipe_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -193,7 +195,7 @@ async def parse_recipe_from_url_endpoint(
 
     try:
         normalized = url_recipe_parser.normalize_parsed_recipe(result.recipe)
-        created = recipes_service.create_recipe(db, current_user.id, normalized)
+        created = recipes_service.create_recipe(db, current_user, normalized)
         return ParseUrlResponse(
             success=True,
             recipe=result.recipe,

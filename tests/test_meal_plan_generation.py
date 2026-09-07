@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from jarvis_recipes.app.schemas.auth import CurrentUser
 from jarvis_recipes.app.db import models
 from jarvis_recipes.app.db.base import Base
 from jarvis_recipes.app.schemas.meal_plan import MealPlanGenerateRequest, DayInput, MealSlotInput, Preferences
@@ -19,7 +20,7 @@ def db_session():
     Session = sessionmaker(bind=engine)
     session = Session()
     # create user
-    user = models.User(user_id="user-1")
+    user = models.User(user_id="1")
     session.add(user)
     session.commit()
     yield session
@@ -56,7 +57,7 @@ def test_generate_happy_creates_stage_for_core(db_session):
 
     result, slot_failures = meal_plan_service.generate_meal_plan(
         db_session,
-        "user-1",
+        CurrentUser(id=1),
         _req_single(),
         request_id,
         search_fn=lambda db, **kwargs: fake_search(),
@@ -71,7 +72,7 @@ def test_generate_happy_creates_stage_for_core(db_session):
     # stage stored
     stage = db_session.query(models.StageRecipe).filter_by(id=slot.selection.recipe_id).first()
     assert stage is not None
-    assert stage.user_id == "user-1"
+    assert stage.user_id == "1"
 
 
 def test_generate_partial_selection_null(db_session):
@@ -79,7 +80,7 @@ def test_generate_partial_selection_null(db_session):
 
     result, slot_failures = meal_plan_service.generate_meal_plan(
         db_session,
-        "user-1",
+        CurrentUser(id=1),
         _req_single(),
         request_id,
         search_fn=lambda db, **kwargs: [],
@@ -90,9 +91,10 @@ def test_generate_partial_selection_null(db_session):
 
 
 def test_cleanup_stage_recipes(db_session):
+    # No explicit id: stage_recipes.id is an autoincrement integer now (migration
+    # f6a7b8c9d0e1), matching every other recipe id in the service.
     expired = models.StageRecipe(
-        id="stage-1",
-        user_id="user-1",
+        user_id="1",
         title="Old",
         description=None,
         yield_text=None,
@@ -161,7 +163,7 @@ def test_llm_selection_valid_candidate(db_session):
     with patch("jarvis_recipes.app.services.llm_client.call_meal_plan_select", mock_llm_fn):
         result, slot_failures = meal_plan_service.generate_meal_plan(
             db_session,
-            "user-1",
+            CurrentUser(id=1),
             _req_single(),
             request_id,
             search_fn=lambda db, **kwargs: fake_search(),
@@ -204,7 +206,7 @@ def test_llm_selection_returns_null(db_session):
     with patch("jarvis_recipes.app.services.llm_client.call_meal_plan_select", mock_llm_fn):
         result, slot_failures = meal_plan_service.generate_meal_plan(
             db_session,
-            "user-1",
+            CurrentUser(id=1),
             _req_single(),
             request_id,
             search_fn=lambda db, **kwargs: fake_search(),
@@ -238,7 +240,7 @@ def test_llm_selection_invalid_id_handled(db_session):
     with patch("jarvis_recipes.app.services.llm_client.call_meal_plan_select", mock_llm_fn):
         result, slot_failures = meal_plan_service.generate_meal_plan(
             db_session,
-            "user-1",
+            CurrentUser(id=1),
             _req_single(),
             request_id,
             search_fn=lambda db, **kwargs: fake_search(),
@@ -300,7 +302,7 @@ def test_llm_receives_recent_meals(db_session):
         
         result, slot_failures = meal_plan_service.generate_meal_plan(
             db_session,
-            "user-1",
+            CurrentUser(id=1),
             _req_single(),
             request_id,
             search_fn=lambda db, **kwargs: fake_search(),
@@ -351,7 +353,7 @@ def test_deterministic_mode_no_llm(db_session):
     with patch("jarvis_recipes.app.services.llm_client.call_meal_plan_select", mock_llm_fn):
         result, slot_failures = meal_plan_service.generate_meal_plan(
             db_session,
-            "user-1",
+            CurrentUser(id=1),
             _req_single(),
             request_id,
             search_fn=lambda db, **kwargs: fake_search(),
@@ -405,7 +407,7 @@ def test_llm_failure_fallback_to_deterministic(db_session):
     with patch("jarvis_recipes.app.services.llm_client.call_meal_plan_select", mock_llm_fn):
         result, slot_failures = meal_plan_service.generate_meal_plan(
             db_session,
-            "user-1",
+            CurrentUser(id=1),
             _req_single(),
             request_id,
             search_fn=lambda db, **kwargs: fake_search(),
@@ -455,7 +457,7 @@ def test_result_not_echo_input_payload(db_session):
     
     result, slot_failures = meal_plan_service.generate_meal_plan(
         db_session,
-        "user-1",
+        CurrentUser(id=1),
         req,
         request_id,
         search_fn=lambda db, **kwargs: fake_search(),
@@ -485,3 +487,132 @@ def test_result_not_echo_input_payload(db_session):
     # But it should ADD the selection
     assert slot_failures == 0
 
+
+
+# ── Tag matching ──────────────────────────────────────────────────────────────
+
+
+def test_tag_matching_ignores_case():
+    """The mobile tag picker lowercases every chip before sending it.
+
+    A case-sensitive intersection meant picking "american" matched nothing when
+    the recipe was tagged "American", and the slot reported "Could not find a
+    recipe fitting your criteria" for a recipe that obviously fit.
+    """
+    from jarvis_recipes.app.services.meal_plan_service import _matches_any_tag
+
+    assert _matches_any_tag(["american"], ["American", "Dinner"])
+    assert _matches_any_tag(["MAIN COURSE"], ["main course"])
+    assert _matches_any_tag(["dinner"], ["Dinner"])
+
+
+def test_tag_matching_still_rejects_a_genuine_mismatch():
+    from jarvis_recipes.app.services.meal_plan_service import _matches_any_tag
+
+    assert not _matches_any_tag(["dessert"], ["American", "Dinner"])
+
+
+def test_no_tag_filter_matches_everything():
+    from jarvis_recipes.app.services.meal_plan_service import _matches_any_tag
+
+    assert _matches_any_tag([], ["anything"])
+
+
+def test_llm_base_url_resolves_without_service_config_init(monkeypatch):
+    """The RQ worker never runs main.py's startup, so service_config is never
+    initialised there -- and the worker is what generates meal plans.
+
+    This used to be gated on service_config.is_initialized(), so the worker
+    skipped resolution entirely, fell through to an empty LLM_BASE_URL, and every
+    slot came back "LLM unavailable, using deterministic selection" while the API
+    container resolved it fine.
+    """
+    from jarvis_recipes.app.services import llm_client
+
+    monkeypatch.setattr(
+        llm_client.service_config, "is_initialized", lambda: False, raising=False
+    )
+    monkeypatch.setattr(
+        llm_client.service_config, "get_llm_proxy_url", lambda: "http://llm-proxy-api:7704"
+    )
+
+    assert llm_client._llm_base_url() == "http://llm-proxy-api:7704"
+
+
+def test_llm_base_url_still_falls_back_to_the_legacy_setting(monkeypatch):
+    from jarvis_recipes.app.services import llm_client
+
+    def _undiscoverable():
+        raise ValueError("Cannot discover jarvis-llm-proxy-api")
+
+    monkeypatch.setattr(llm_client.service_config, "get_llm_proxy_url", _undiscoverable)
+    monkeypatch.setattr(
+        llm_client, "get_settings", lambda: type("S", (), {"llm_base_url": "http://legacy:7704"})()
+    )
+
+    assert llm_client._llm_base_url() == "http://legacy:7704"
+
+
+def test_a_slot_can_report_a_reason_without_a_recipe():
+    """Regression: Selection.recipe_id was required.
+
+    The "already_used" path builds a Selection carrying only a warning -- every
+    matching recipe is booked on another day -- so recipe_id is None. With the
+    field required this raised "1 validation error for Selection ... input should
+    be a valid string" and failed the ENTIRE generation rather than one slot.
+    """
+    from jarvis_recipes.app.schemas.meal_plan import Selection
+
+    sel = Selection(source="user", warnings=["already_used: booked elsewhere"])
+
+    assert sel.recipe_id is None
+    assert sel.warnings == ["already_used: booked elsewhere"]
+
+
+def test_a_normal_selection_still_carries_its_recipe():
+    from jarvis_recipes.app.schemas.meal_plan import Selection
+
+    sel = Selection(source="user", recipe_id="42")
+
+    assert sel.recipe_id == "42"
+
+
+def test_staged_recipe_ids_are_numeric(db_session):
+    """The fault line that caused three bugs.
+
+    stage_recipes.id used to be a UUID string while recipes.id is an integer, and
+    both travel through the same fields — Selection.recipe_id, the mobile plan
+    state, exclude_recipe_ids. That mismatch produced:
+
+      * /recipes/<uuid> -> 422 when drilling into a staged pick
+      * Number(uuid) -> NaN -> JSON null in exclude_recipe_ids: List[int] -> 422,
+        breaking re-roll and shuffle for the entire plan
+      * meal_plan_items.recipe_id is an FK to recipes.id, so a plan containing a
+        staged pick could not be committed at all
+
+    Everything downstream assumes `int(recipe_id)` works. This pins that.
+    """
+    stage_id = meal_plan_service.create_stage_recipe(
+        db_session,
+        "1",
+        {"title": "Staged Dinner", "ingredients": [], "steps": []},
+        request_id="req-1",
+    )
+
+    assert stage_id.isdigit(), f"staged id must be numeric, got {stage_id!r}"
+    assert int(stage_id) > 0
+
+
+def test_a_staged_recipe_can_be_fetched_back_by_its_id(db_session):
+    stage_id = meal_plan_service.create_stage_recipe(
+        db_session,
+        "1",
+        {"title": "Round Trip", "ingredients": [], "steps": []},
+        request_id="req-2",
+    )
+
+    found = meal_plan_service.get_recipe_details(db_session, "1", "stage", stage_id)
+
+    assert found is not None
+    assert found["title"] == "Round Trip"
+    assert found["id"] == stage_id, "the id must round-trip in the same form"

@@ -55,6 +55,18 @@ SETTINGS_DEFINITIONS: list[SettingDefinition] = [
         description="Model name used for cheap OCR-text structuring passes",
         env_fallback="JARVIS_LIGHTWEIGHT_MODEL_NAME",
     ),
+    # Read by services/llm_client.match_grocery_items. "background" is a routing
+    # alias the proxy understands directly (api/chat_routes.py), not a filename:
+    # it runs on the second model slot, which is the slower, larger one and is not
+    # holding the interactive session's context.
+    SettingDefinition(
+        key="llm.background_model_name",
+        category="llm",
+        value_type="string",
+        default="background",
+        description="Model name used for slow background passes (grocery SKU matching)",
+        env_fallback="JARVIS_BACKGROUND_MODEL_NAME",
+    ),
     # Read by services/queue_worker.py and scripts/run_parse_worker.py.
     SettingDefinition(
         key="queue.max_retries",

@@ -162,7 +162,11 @@ Mobile polls GET /meal-plans/generate/jobs/{job_id}
 2. **OCR provider choice belongs to jarvis-ocr-service.** This service calls the batch endpoint with `provider="auto"` and gates the result with `services/ocr_quality.py` (char/line counts + a gibberish heuristic). **Don't add strict consensus rules here** — recipe images are noisy and best-effort beats high-confidence-no-result.
 3. **The extractor chain is the fallback story.** schema.org → heuristic → LLM. Sites change their DOM constantly; the LLM tier is why that doesn't page anyone. Don't break the chain.
 4. **Quantity parsing is permissive.** "1.5 cups" / "1½ cups" / "1 1/2 cup" all need to parse to `1.5` cups — unicode fractions, mixed forms, etc. **When adding a new format, write the test first.**
-5. **`AUTH_SECRET_KEY` must match jarvis-auth.** Same shared-secret JWT pattern as the rest of the stack. The *algorithm* is a settings-DB value (`auth.algorithm`), not a pydantic field.
+5. **JWT verification accepts HS256 *and* RS256, and binds the key to the algorithm FAMILY.** jarvis-auth is migrating HS256 → RS256; a verifier pinned to one algorithm makes a staged rollout impossible, since tokens minted before the flip must keep working after it. `api/deps.py` takes the algorithm from the token header, checks it against an allowlist (so `"none"` is rejected), then picks key material by family: HS256 → `AUTH_SECRET_KEY`, RS256 → jarvis-auth's published public key.
+
+   **Do not "simplify" that into one shared key variable.** The RSA public key is published at `jarvis-auth /auth/public-key` for anyone to read. If a single variable held "the key", an attacker could sign a token HS256 using that public key as the HMAC secret and be verified. `tests/test_settings.py::test_hs256_signed_with_the_public_key_is_rejected` forges exactly that by hand and must keep passing.
+
+   The RS256 public key is fetched over plain HTTP and cached for the process lifetime, so a *running* service keeps verifying if jarvis-auth goes down; only a cold start during an outage fails, and it fails closed. Implemented with `httpx` rather than `jarvis-auth-client` on purpose — this service is being decoupled from the stack, and a new Jarvis library dependency just to verify a token moves it the wrong way. `auth.algorithm` was dropped (migration `d4e5f6a7b8c9`): it only ever governed what jarvis-auth *mints*, which is not this service's business.
 6. **Two database URLs (`DATABASE_URL` + `MIGRATIONS_DATABASE_URL`).** `apply_migrations.sh` and `scripts/make_migration.py` prefer the migration URL; it is often the host-network form while `DATABASE_URL` is the container one.
 7. **Every domain route requires a user JWT.** `deps.verify_app_auth` exists and is imported by `main.py`, but it is **not attached to any router** — app-to-app credentials do not open the recipes API. The only app-creds surface is `/settings/*` (reads via combined auth; writes are superuser-JWT only).
 8. **No multi-household scoping.** `household_id` exists only on the `settings` table. Recipes/meal plans are keyed by `user_id`. If you add household scoping, audit every query — there is no filter pattern in place.
@@ -252,7 +256,7 @@ Tables (see `jarvis_recipes/app/db/models.py`):
 - `stock_ingredients` / `stock_units_of_measure` — curated static reference data
 - `settings` — multi-tenant runtime settings (the only table with `household_id`)
 
-Migrations: 9 under `alembic/versions/`. Current head is `c3d4e5f6a7b8`. **Use `alembic heads`** — grepping `down_revision` lies, and at least one migration's docstring disagrees with its actual `down_revision`.
+Migrations: 10 under `alembic/versions/`. Current head is `d4e5f6a7b8c9`. **Use `alembic heads`** — grepping `down_revision` lies, and at least one migration's docstring disagrees with its actual `down_revision`.
 
 ## Config surface
 
@@ -261,12 +265,12 @@ Secrets, discovery and bootstrap values only. **Runtime knobs live in the settin
 | Variable | Required | Purpose |
 |---|---|---|
 | `DATABASE_URL` / `MIGRATIONS_DATABASE_URL` | yes | Postgres |
-| `AUTH_SECRET_KEY` | yes | JWT validation (must match jarvis-auth) |
+| `AUTH_SECRET_KEY` | yes | HS256 JWT validation (must match jarvis-auth). Still required during the RS256 migration window; once jarvis-auth mints RS256 only, this service needs no shared secret at all. |
 | `ADMIN_SECRET` | yes | `X-Admin-Secret` for the `/admin/*` seed routes |
 | `JARVIS_ENV` | no (`development`) | `production` makes weak secrets fatal at boot |
 | `JARVIS_CONFIG_URL` | yes | Service discovery |
 | `JARVIS_APP_ID` / `JARVIS_APP_KEY` | yes | Outbound app-to-app creds (llm-proxy, OCR, jarvis-logs) |
-| `JARVIS_AUTH_BASE_URL` | optional | Legacy direct auth URL, used if discovery misses |
+| `JARVIS_AUTH_BASE_URL` | **required for RS256** | Auth URL, used if discovery misses. `deps._rs256_public_key()` fetches `{auth_url}/auth/public-key` from here; if neither this nor `JARVIS_CONFIG_URL` resolves, every RS256 token 401s. |
 | `JARVIS_OCR_SERVICE_URL` | optional | Gates the OCR tier in the image pipeline |
 | `LLM_BASE_URL` | optional | Legacy llm-proxy URL, used if discovery misses |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | required (queue) | RQ |
@@ -280,7 +284,6 @@ Declared in `services/settings_service.py`, seeded by `alembic/versions/c3d4e5f6
 
 | Key | Default | env_fallback |
 |---|---|---|
-| `auth.algorithm` | `HS256` | `AUTH_ALGORITHM` |
 | `llm.full_model_name` | `live` | `JARVIS_FULL_MODEL_NAME` |
 | `llm.lightweight_model_name` | `live` | `JARVIS_LIGHTWEIGHT_MODEL_NAME` |
 | `queue.max_retries` | `3` | `LLM_RECIPE_QUEUE_MAX_RETRIES` |
@@ -349,9 +352,9 @@ poetry run pytest -v --tb=short
 
 Integration tests are marked `integration` and deselected by default (`pytest.ini` addopts `-m "not integration"`). Coverage has **no omit list** — the CI gate is the honest floor, currently 48%. The big untested surfaces are `queue_worker.py`, `llm_client.py` and `image_ingest_worker.py`.
 
-Covers: URL parsing + SSRF preflight, image pipeline (mocked OCR), meal plan generation (mocked LLM), quantity parsing, stock endpoints, recipe CRUD, secret guard, settings definitions/service/routes, `/health`.
+Covers: URL parsing + SSRF preflight, image pipeline (mocked OCR), meal plan generation (mocked LLM), quantity parsing, stock endpoints, recipe CRUD, secret guard, settings definitions/service/routes, JWT verification (HS256 + RS256 dual-accept, the public-key fetch and its failure modes), `/health`.
 
-`tests/test_settings.py` also carries two cheap static guards worth keeping: every `SettingDefinition` must be read somewhere, and every module that calls `get_settings_service()` must import it (a missing import is a NameError only the live route would surface).
+`tests/test_settings.py` is also where the JWT verification tests live (historical, and the file is large as a result): `TestVerificationAcceptsBothAlgorithms` covers the HS256/RS256 window and the algorithm-confusion forgery, `TestRs256PublicKeyFetch` covers the key fetch, its caching and every way it can fail. It carries two cheap static guards worth keeping too: every `SettingDefinition` must be read somewhere, and every module that calls `get_settings_service()` must import it (a missing import is a NameError only the live route would surface).
 
 ## Failure modes
 

@@ -32,6 +32,11 @@ def seed_stock_recipes(db: Session, base_path: Path, user_id: str) -> Dict[str, 
     if not data:
         return stats
 
+    # Deliberately per-USER, not per-household: this is the admin seed route
+    # (X-Admin-Secret, no JWT), which loads the stock set into one named account
+    # for dev. There is no caller household to scope by, and dedup should be
+    # against what that account already has. Everything a real user reads goes
+    # through services/scoping.py instead.
     existing_titles = {
         r.title.lower(): r.id
         for r in db.query(models.Recipe)

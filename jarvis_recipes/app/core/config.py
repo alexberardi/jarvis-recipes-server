@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     jarvis_ocr_service_url: str | None = Field(None, alias="JARVIS_OCR_SERVICE_URL")
     # OCR service uses same auth as LLM proxy
     # (jarvis_app_id and jarvis_app_key are reused)
+    # Every OCR host gets its own queue and every image goes to all of them; the
+    # readings are joined before the LLM sees them (services/ocr_join). Comma
+    # separated. The default is the single shared queue, which behaves exactly as
+    # before -- one host, one reading, no join to wait for.
+    ocr_queues: str = Field("jarvis.ocr.jobs", alias="OCR_QUEUES")
+    # How long to wait for the slower hosts once the first has answered. Past
+    # this the pipeline continues with whatever arrived: a sleeping Mac costs its
+    # reading, not the import.
+    ocr_join_timeout_seconds: int = Field(90, alias="OCR_JOIN_TIMEOUT_SECONDS")
     redis_host: str = Field("localhost", alias="REDIS_HOST")
     redis_port: int = Field(6379, alias="REDIS_PORT")
     redis_password: str | None = Field(None, alias="REDIS_PASSWORD")

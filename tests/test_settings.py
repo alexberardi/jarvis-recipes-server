@@ -36,6 +36,7 @@ _VERSIONS = REPO_ROOT / "alembic" / "versions"
 PRUNE_MIGRATIONS = [
     _VERSIONS / "c3d4e5f6a7b8_prune_phantom_settings_seed_real_knobs.py",
     _VERSIONS / "d4e5f6a7b8c9_drop_auth_algorithm.py",
+    _VERSIONS / "b8c9d0e1f2a3_seed_background_model_name.py",
 ]
 
 
@@ -95,6 +96,9 @@ class TestSettingsDefinitions:
             # single configured algorithm no longer controls anything here.
             "llm.full_model_name",
             "llm.lightweight_model_name",
+            # Grocery SKU matching. "background" is a proxy routing alias for the
+            # second model slot, not a filename.
+            "llm.background_model_name",
             "queue.max_retries",
             "parse_job.abandon_minutes",
             "image.max_bytes",

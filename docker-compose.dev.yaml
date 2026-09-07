@@ -21,6 +21,12 @@ services:
       - "${DOCKER_HOST_ALIAS:-host.docker.internal}:host-gateway"
     volumes:
       - ./jarvis_recipes:/app/jarvis_recipes
+      # Mounted so a new migration works without rebuilding the image. The
+      # command runs `alembic upgrade head` on boot; without this the
+      # container carries whatever versions/ existed at build time and dies
+      # with "Can't locate revision" as soon as one is added on the host.
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
       - ./media:/app/media
       - ./tests:/app/tests
       - ../jarvis-config-client:/jarvis-config-client

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -10,6 +9,8 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from jarvis_recipes.app.db import models
+from jarvis_recipes.app.schemas.auth import CurrentUser
+from jarvis_recipes.app.services.scoping import visible_to
 from jarvis_recipes.app.schemas.meal_plan import (
     MealPlanGenerateRequest,
     MealPlanResult,
@@ -24,9 +25,24 @@ from jarvis_recipes.app.services import llm_client, mailbox_service, static_reci
 MEAL_ORDER: List[MealType] = ["breakfast", "lunch", "dinner", "snack", "dessert"]
 
 
+def _matches_any_tag(wanted: List[str], have: List[str]) -> bool:
+    """Case-insensitive tag match.
+
+    The mobile tag picker lowercases every chip for display
+    (MealPlanDayConfigScreen), so it sends "american" while the database holds
+    "American" -- a case-sensitive set intersection found nothing and the slot
+    came back "Could not find a recipe fitting your criteria" for a recipe that
+    plainly matched. Tags are user-entered from several sources (manual, schema.org
+    imports, the stock set), so case is not something either side can rely on.
+    """
+    if not wanted:
+        return True
+    return bool({t.lower() for t in wanted} & {t.lower() for t in have})
+
+
 def search_recipes(
     db: Session,
-    user_id: str,
+    user: CurrentUser,
     meal_type: MealType,
     tags_any: List[str],
     tags_all: List[str],
@@ -39,7 +55,9 @@ def search_recipes(
 ) -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
     # User recipes
-    q = db.query(models.Recipe).filter(models.Recipe.user_id == user_id)
+    # Candidates are the household's box: planning draws on every recipe the
+    # family has, not just the planner's own imports.
+    q = db.query(models.Recipe).filter(visible_to(models.Recipe, user))
     if include_terms:
         for term in include_terms[:5]:
             like = f"%{term}%"
@@ -53,7 +71,7 @@ def search_recipes(
         if str(r.id) in exclude_recipe_ids:
             continue
         tag_names = [t.name for t in r.tags] if hasattr(r, "tags") else []
-        if tags_any and not set(tags_any).intersection(tag_names):
+        if not _matches_any_tag(tags_any, tag_names):
             continue
         results.append(
             {
@@ -74,7 +92,7 @@ def search_recipes(
             if s.get("id") in exclude_recipe_ids:
                 continue
             tags = s.get("tags") or []
-            if tags_any and not set(tags_any).intersection(tags):
+            if not _matches_any_tag(tags_any, tags):
                 continue
             results.append(
                 {
@@ -109,11 +127,15 @@ def get_recipe_details(db: Session, user_id: str, source: str, recipe_id: str) -
             "notes": [],
         }
     if source == "stage":
-        stage = db.get(models.StageRecipe, recipe_id)
+        # recipe_id arrives as a string ("12"); the primary key is an integer.
+        try:
+            stage = db.get(models.StageRecipe, int(recipe_id))
+        except (TypeError, ValueError):
+            return None
         if not stage or stage.user_id != user_id:
             return None
         return {
-            "id": stage.id,
+            "id": str(stage.id),
             "title": stage.title,
             "description": stage.description,
             "yield": stage.yield_text,
@@ -146,9 +168,9 @@ def get_recipe_details(db: Session, user_id: str, source: str, recipe_id: str) -
 
 def create_stage_recipe(db: Session, user_id: str, source_recipe: Dict[str, Any], request_id: str) -> str:
     expires_at = datetime.utcnow() + timedelta(hours=72)
-    stage_id = str(uuid.uuid4())
+    # The id is assigned by the database now rather than generated here; see
+    # migration f6a7b8c9d0e1 for why it stopped being a UUID.
     stage = models.StageRecipe(
-        id=stage_id,
         user_id=user_id,
         title=source_recipe.get("title") or "Untitled",
         description=source_recipe.get("description"),
@@ -166,7 +188,10 @@ def create_stage_recipe(db: Session, user_id: str, source_recipe: Dict[str, Any]
     db.add(stage)
     db.commit()
     db.refresh(stage)
-    return stage.id
+    # Stringified to match how committed recipe ids travel in Selection.recipe_id
+    # ("1", not 1). The value is now an integer underneath, so Number() on the
+    # client yields a real number instead of NaN.
+    return str(stage.id)
 
 
 def _build_terms(slot) -> Dict[str, List[str]]:
@@ -211,7 +236,7 @@ def get_recent_meals(
 
 def generate_meal_plan(
     db: Session,
-    user_id: str,
+    user: CurrentUser,
     req: MealPlanGenerateRequest,
     request_id: str,
     progress_every: int = 3,
@@ -226,6 +251,10 @@ def generate_meal_plan(
     If use_llm=True (default), the LLM will select the best recipe from candidates per slot.
     If use_llm=False, the first candidate will be selected deterministically (for testing/fallback).
     """
+    # Most of this function only needs the id (ownership of stage rows, publishing
+    # progress). Only candidate SEARCH needs the household, so `user` is threaded
+    # to search_fn and the rest keeps working off the id.
+    user_id = str(user.id)
     days_sorted = sorted(req.days, key=lambda d: d.date)
     day_results: List[DayResult] = []
     slot_counter = 0
@@ -246,7 +275,7 @@ def generate_meal_plan(
             terms = _build_terms(slot)
             candidates = search_fn(
                 db=db,
-                user_id=user_id,
+                user=user,
                 meal_type=meal_key,  # type: ignore[arg-type]
                 tags_any=slot.tags or req.preferences.soft.tags,
                 tags_all=[],
@@ -374,7 +403,37 @@ def generate_meal_plan(
                     used_recipe_ids.add(selection_recipe_id)
             else:
                 slot_failures += 1
-            
+                # Distinguish "nothing in the box matches" from "the only matches
+                # are already on the plan". Both surfaced as "add recipes that fit
+                # the selections", which is wrong and unactionable in the second
+                # case -- the recipe exists, it is just used on another day.
+                would_match = search_fn(
+                    db=db,
+                    user=user,
+                    meal_type=meal_key,  # type: ignore[arg-type]
+                    tags_any=slot.tags or req.preferences.soft.tags,
+                    tags_all=[],
+                    include_terms=terms["include_terms"],
+                    exclude_terms=req.preferences.hard.excluded_ingredients
+                    + terms["exclude_terms"],
+                    max_prep_minutes=req.preferences.soft.max_prep_minutes,
+                    max_cook_minutes=req.preferences.soft.max_cook_minutes,
+                    exclude_recipe_ids=[],
+                    limit=1,
+                )
+                if would_match:
+                    selection = Selection(
+                        source="user",
+                        recipe_id=None,
+                        confidence=None,
+                        matched_tags=[],
+                        warnings=[
+                            "already_used: every recipe matching these tags is "
+                            "already on this plan"
+                        ],
+                        alternatives=[],
+                    )
+
             meal_results[meal_key] = MealSlotResult(**slot.model_dump(), selection=selection)
             progress_batch += 1
             if progress_batch >= progress_every:

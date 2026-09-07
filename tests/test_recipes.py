@@ -1,5 +1,6 @@
 from datetime import date
 
+from jarvis_recipes.app.schemas.auth import CurrentUser
 from jarvis_recipes.app.schemas.recipe import RecipeCreate
 from jarvis_recipes.app.services import recipes_service
 
@@ -28,7 +29,7 @@ def test_create_recipe_and_scoping(client, db_session, user_token):
     other_payload = recipe_payload()
     other_payload["title"] = "Other User Recipe"
     other_recipe = RecipeCreate(**other_payload)
-    recipes_service.create_recipe(db_session, 2, other_recipe)
+    recipes_service.create_recipe(db_session, CurrentUser(id=2), other_recipe)
     list_response = client.get("/recipes", headers={"Authorization": f"Bearer {user_token}"})
     assert list_response.status_code == 200
     titles = {r["title"] for r in list_response.json()}
