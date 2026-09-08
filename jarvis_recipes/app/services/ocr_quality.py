@@ -34,7 +34,17 @@ def score_quality(text: str, mean_confidence: float | None) -> Dict[str, int | b
     char_count = len(text)
     line_count = len(lines)
 
-    hard_fail = char_count < 500 or line_count < 10
+    # 250, not 500. The old floor was set against printed recipe PAGES and
+    # silently excluded the format people most want to photograph: a handwritten
+    # index card. A real one -- the crepe card in tests/fixtures/ocr_samples.py --
+    # reads as 366 characters through Apple Vision, with every key line legible
+    # ("3 eggs", "1 cup flour", "1/4 tsp salt", "Beat eggs", "Heat pan"). It was
+    # being thrown away for being short, not for being unreadable.
+    #
+    # Length was doing a job it is bad at. `token_count` is what actually
+    # separates readable text from mush: the same card scores 62 tokens through
+    # Apple Vision and 26 through rapidocr, whose output really is unusable.
+    hard_fail = char_count < 250 or line_count < 10
     gib = _gibberish_flags(text)
 
     score = 0

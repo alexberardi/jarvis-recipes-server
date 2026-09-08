@@ -1,5 +1,6 @@
 from datetime import date
 
+from jarvis_recipes.app.schemas.auth import CurrentUser
 from jarvis_recipes.app.schemas.recipe import RecipeCreate
 from jarvis_recipes.app.services import recipes_service
 
@@ -28,7 +29,7 @@ def test_create_recipe_and_scoping(client, db_session, user_token):
     other_payload = recipe_payload()
     other_payload["title"] = "Other User Recipe"
     other_recipe = RecipeCreate(**other_payload)
-    recipes_service.create_recipe(db_session, 2, other_recipe)
+    recipes_service.create_recipe(db_session, CurrentUser(id=2), other_recipe)
     list_response = client.get("/recipes", headers={"Authorization": f"Bearer {user_token}"})
     assert list_response.status_code == 200
     titles = {r["title"] for r in list_response.json()}
@@ -74,3 +75,28 @@ def test_planner_draft(client, user_token):
     assert "items" in body
     assert len(body["items"]) > 0
 
+
+
+def test_list_parse_jobs_uses_the_abandon_window_setting(client, user_token):
+    """Regression: this handler reads parse_job.abandon_minutes from the settings DB.
+
+    Uses the /parse-url/jobs alias because the bare /recipes/jobs path is
+    shadowed — see test_bare_recipes_jobs_path_is_shadowed below.
+    """
+    response = client.get(
+        "/recipes/parse-url/jobs", headers={"Authorization": f"Bearer {user_token}"}
+    )
+    assert response.status_code == 200
+    assert response.json() == {"jobs": []}
+
+
+def test_bare_recipes_jobs_path_is_shadowed(client, user_token):
+    """Pre-existing bug, pinned so a fix is noticed rather than silently landing.
+
+    GET /recipes/{recipe_id} is registered before GET /recipes/jobs, and
+    recipe_id is an int, so "jobs" fails path validation with a 422 and the
+    list-jobs handler is never reached. Fix = move the literal-path routes above
+    the /{recipe_id} routes; then this test should assert 200.
+    """
+    response = client.get("/recipes/jobs", headers={"Authorization": f"Bearer {user_token}"})
+    assert response.status_code == 422

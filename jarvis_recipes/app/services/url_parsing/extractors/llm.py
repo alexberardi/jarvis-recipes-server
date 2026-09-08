@@ -11,9 +11,11 @@ from bs4 import BeautifulSoup
 
 from jarvis_recipes.app.core.config import get_settings
 from jarvis_recipes.app.services.llm_client import (
+    _llm_base_url,
     _repair_json_via_full_llm,
     _try_local_json_repair,
 )
+from jarvis_recipes.app.services.settings_service import get_settings_service
 from jarvis_recipes.app.services.url_parsing.extractors.heuristic import (
     _find_ingredient_items,
     _find_instruction_items,
@@ -113,8 +115,7 @@ async def extract_recipe_via_llm(
 ) -> ParsedRecipe:
     """Extract recipe using LLM when structured parsing fails."""
     settings = get_settings()
-    if not settings.llm_base_url:
-        raise ValueError("LLM_BASE_URL is not configured")
+    llm_base_url = _llm_base_url()
 
     title, truncated_text = _build_llm_content(html)
 
@@ -134,7 +135,7 @@ async def extract_recipe_via_llm(
         "- Tags: general categories only (e.g., 'chicken', 'dinner'), not recipe names\n"
     )
 
-    model_name = settings.llm_full_model_name or "live"
+    model_name = get_settings_service().get_str("llm.full_model_name", "live")
 
     payload = {
         "model": model_name,
@@ -162,7 +163,7 @@ async def extract_recipe_via_llm(
     timeout = httpx.Timeout(90.0, read=80.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
-            f"{settings.llm_base_url}/v1/chat/completions", json=payload, headers=headers
+            f"{llm_base_url}/v1/chat/completions", json=payload, headers=headers
         )
     response.raise_for_status()
 

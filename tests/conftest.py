@@ -58,8 +58,16 @@ def auth_settings():
     return get_settings()
 
 
-def make_token(user_id: int, email: str, settings) -> str:
+def make_token(user_id: int, email: str, settings, household_id: str | None = None) -> str:
+    """Mint a token the way jarvis-auth does.
+
+    household_id is optional because real tokens omit it for a user who belongs
+    to no household -- and because tokens minted before households existed have
+    no such claim. Those callers must keep seeing their own recipes.
+    """
     payload = {"sub": str(user_id), "email": email}
+    if household_id:
+        payload["household_id"] = household_id
     return jwt.encode(payload, settings.auth_secret_key, algorithm=settings.auth_algorithm)
 
 

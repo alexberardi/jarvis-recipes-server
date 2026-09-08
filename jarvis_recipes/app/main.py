@@ -1,5 +1,4 @@
 import logging
-import os
 import uuid
 
 from fastapi import FastAPI
@@ -13,7 +12,13 @@ from jarvis_recipes.app.api.deps import verify_app_auth
 from jarvis_recipes.app.api.routes import api_router
 from jarvis_recipes.app.core import service_config
 from jarvis_recipes.app.core.config import enforce_secret_security, get_settings
+from jarvis_recipes.app.core.logging_config import setup_console_logging, setup_remote_logging
 from jarvis_recipes.app.services.settings_service import get_settings_service
+
+# Before create_app(): the Dockerfile CMD is a bare uvicorn, whose default config
+# configures only the uvicorn* loggers, so without this nothing this package logs
+# ever reaches a handler.
+setup_console_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +50,14 @@ def create_app() -> FastAPI:
     app.include_router(api_router)
     app.mount("/media", StaticFiles(directory=settings.media_root), name="media")
 
-    # Settings routes (app-to-app auth for reads, superuser JWT for writes)
-    _auth_url = os.getenv("JARVIS_AUTH_BASE_URL", "http://localhost:7701")
+    # Settings routes (app-to-app auth for reads, superuser JWT for writes).
+    # Pass the getter, not a resolved URL: jarvis-settings-client accepts
+    # `str | Callable[[], str]` and resolves per request, so discovery has run by
+    # the time it is called. A literal here would pin localhost inside a container.
     _settings_router = create_settings_router(
         service=get_settings_service(),
-        auth_dependency=create_combined_auth(_auth_url),
-        write_auth_dependency=create_superuser_auth(_auth_url),
+        auth_dependency=create_combined_auth(service_config.get_auth_url),
+        write_auth_dependency=create_superuser_auth(service_config.get_auth_url),
     )
     app.include_router(_settings_router, prefix="/settings", tags=["settings"])
 
@@ -64,6 +71,7 @@ def create_app() -> FastAPI:
             logger.info("Service discovery initialized")
         else:
             logger.info("Using environment variables for service URLs")
+        setup_remote_logging()
 
     return app
 

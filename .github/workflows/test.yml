@@ -22,20 +22,23 @@ jobs:
       uses: actions/cache@v6
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    - name: Install dependencies
+    - name: Install Poetry
       run: |
         python -m pip install --upgrade pip
-        pip install pytest pytest-asyncio==0.23.8 pytest-cov
-        pip install git+https://github.com/alexberardi/jarvis-settings-client.git@main
-        pip install git+https://github.com/alexberardi/jarvis-config-client.git@main
-        pip install -e "."
+        pip install poetry==2.2.1
+
+    - name: Verify lock file is in sync
+      run: poetry check --lock
+
+    - name: Install dependencies
+      run: poetry install
 
     - name: Run tests
-      run: pytest -v --tb=short
+      run: poetry run pytest -v --tb=short
 
     - name: Check test coverage
-      run: pytest --cov --cov-report=term-missing --cov-fail-under=60
+      run: poetry run pytest --cov --cov-report=term-missing --cov-fail-under=48

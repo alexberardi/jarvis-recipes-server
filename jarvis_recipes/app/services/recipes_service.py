@@ -6,6 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from jarvis_recipes.app.db import models
+from jarvis_recipes.app.schemas.auth import CurrentUser
+from jarvis_recipes.app.services.scoping import household_for_write, visible_to
 from jarvis_recipes.app.schemas.recipe import IngredientCreate, RecipeCreate, RecipeUpdate
 from jarvis_recipes.app.services.quantity_parser import parse_quantity_display
 
@@ -70,8 +72,8 @@ def _replace_ingredients(recipe: models.Recipe, ingredients: Iterable[Ingredient
         )
 
 
-def create_recipe(db: Session, user_id: int, data: RecipeCreate) -> models.Recipe:
-    user_id_str = str(user_id)
+def create_recipe(db: Session, user: CurrentUser, data: RecipeCreate) -> models.Recipe:
+    user_id_str = str(user.id)
     _ensure_user(db, user_id_str)
     total_time = data.total_time_minutes
     if total_time is None and (data.prep_time_minutes is not None or data.cook_time_minutes is not None):
@@ -79,6 +81,8 @@ def create_recipe(db: Session, user_id: int, data: RecipeCreate) -> models.Recip
 
     recipe = models.Recipe(
         user_id=user_id_str,
+        # Authorship stays with the creator; visibility goes to the household.
+        household_id=household_for_write(user),
         title=data.title,
         description=data.description,
         image_url=data.image_url,
@@ -97,23 +101,25 @@ def create_recipe(db: Session, user_id: int, data: RecipeCreate) -> models.Recip
     return recipe
 
 
-def list_recipes(db: Session, user_id: str) -> List[models.Recipe]:
-    user_id_str = str(user_id)
-    stmt = select(models.Recipe).where(models.Recipe.user_id == user_id_str).order_by(models.Recipe.created_at.desc())
+def list_recipes(db: Session, user: CurrentUser) -> List[models.Recipe]:
+    stmt = (
+        select(models.Recipe)
+        .where(visible_to(models.Recipe, user))
+        .order_by(models.Recipe.created_at.desc())
+    )
     return list(db.scalars(stmt).all())
 
 
-def get_recipe(db: Session, user_id: str, recipe_id: int) -> models.Recipe:
-    user_id_str = str(user_id)
-    stmt = select(models.Recipe).where(models.Recipe.user_id == user_id_str, models.Recipe.id == recipe_id)
+def get_recipe(db: Session, user: CurrentUser, recipe_id: int) -> models.Recipe:
+    stmt = select(models.Recipe).where(visible_to(models.Recipe, user), models.Recipe.id == recipe_id)
     recipe = db.scalars(stmt).first()
     if not recipe:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipe not found")
     return recipe
 
 
-def update_recipe(db: Session, user_id: str, recipe_id: int, data: RecipeUpdate) -> models.Recipe:
-    recipe = get_recipe(db, user_id, recipe_id)
+def update_recipe(db: Session, user: CurrentUser, recipe_id: int, data: RecipeUpdate) -> models.Recipe:
+    recipe = get_recipe(db, user, recipe_id)
 
     for field in ("title", "description", "servings", "source_type", "source_url", "image_url"):
         value = getattr(data, field)
@@ -138,19 +144,19 @@ def update_recipe(db: Session, user_id: str, recipe_id: int, data: RecipeUpdate)
     return recipe
 
 
-def delete_recipe(db: Session, user_id: str, recipe_id: int) -> None:
-    recipe = get_recipe(db, user_id, recipe_id)
+def delete_recipe(db: Session, user: CurrentUser, recipe_id: int) -> None:
+    recipe = get_recipe(db, user, recipe_id)
     db.delete(recipe)
     db.commit()
 
 
-def list_tags_for_user(db: Session, user_id: str) -> List[models.Tag]:
-    user_id_str = str(user_id)
+def list_tags_for_user(db: Session, user: CurrentUser) -> List[models.Tag]:
+    """Tags in use across the household's box, not just the caller's own."""
     stmt = (
         select(models.Tag)
         .join(models.recipe_tags, models.Tag.id == models.recipe_tags.c.tag_id)
         .join(models.Recipe, models.recipe_tags.c.recipe_id == models.Recipe.id)
-        .where(models.Recipe.user_id == user_id_str)
+        .where(visible_to(models.Recipe, user))
         .group_by(models.Tag.id)
         .order_by(models.Tag.name.asc())
     )
@@ -161,8 +167,8 @@ def create_tag(db: Session, name: str) -> models.Tag:
     return _get_or_create_tag(db, name)
 
 
-def attach_tag(db: Session, user_id: str, recipe_id: int, tag_id: int) -> models.Recipe:
-    recipe = get_recipe(db, user_id, recipe_id)
+def attach_tag(db: Session, user: CurrentUser, recipe_id: int, tag_id: int) -> models.Recipe:
+    recipe = get_recipe(db, user, recipe_id)
     tag = db.get(models.Tag, tag_id)
     if not tag:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
@@ -173,8 +179,8 @@ def attach_tag(db: Session, user_id: str, recipe_id: int, tag_id: int) -> models
     return recipe
 
 
-def detach_tag(db: Session, user_id: str, recipe_id: int, tag_id: int) -> models.Recipe:
-    recipe = get_recipe(db, user_id, recipe_id)
+def detach_tag(db: Session, user: CurrentUser, recipe_id: int, tag_id: int) -> models.Recipe:
+    recipe = get_recipe(db, user, recipe_id)
     tag = db.get(models.Tag, tag_id)
     if not tag or tag not in recipe.tags:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not attached")

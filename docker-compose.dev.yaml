@@ -9,6 +9,11 @@ services:
     environment:
       - JARVIS_CONFIG_URL=http://host.docker.internal:7700
       - JARVIS_CONFIG_URL_STYLE=dockerized
+      # Passed through from the shell when set, otherwise .env supplies them.
+      - JARVIS_APP_ID
+      - JARVIS_APP_KEY
+      - JARVIS_LOG_CONSOLE_LEVEL
+      - JARVIS_LOG_REMOTE_LEVEL
       - REDIS_HOST=host.docker.internal
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
@@ -16,6 +21,12 @@ services:
       - "${DOCKER_HOST_ALIAS:-host.docker.internal}:host-gateway"
     volumes:
       - ./jarvis_recipes:/app/jarvis_recipes
+      # Mounted so a new migration works without rebuilding the image. The
+      # command runs `alembic upgrade head` on boot; without this the
+      # container carries whatever versions/ existed at build time and dies
+      # with "Can't locate revision" as soon as one is added on the host.
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
       - ./media:/app/media
       - ./tests:/app/tests
       - ../jarvis-config-client:/jarvis-config-client
@@ -36,6 +47,11 @@ services:
       - .env
     environment:
       - JARVIS_CONFIG_URL_STYLE=dockerized
+      # Passed through from the shell when set, otherwise .env supplies them.
+      - JARVIS_APP_ID
+      - JARVIS_APP_KEY
+      - JARVIS_LOG_CONSOLE_LEVEL
+      - JARVIS_LOG_REMOTE_LEVEL
       - REDIS_HOST=host.docker.internal
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}

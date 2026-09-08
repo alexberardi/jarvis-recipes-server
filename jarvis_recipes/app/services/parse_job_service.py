@@ -103,10 +103,14 @@ def create_job(
     use_llm_fallback: bool = True,
     job_type: str = "url",
     job_data: Optional[dict] = None,
+    household_id: Optional[str] = None,
 ) -> models.RecipeParseJob:
     job = models.RecipeParseJob(
         id=str(uuid.uuid4()),
         user_id=str(user_id),
+        # Carried so the worker -- which has no token -- can scope candidate
+        # search to the household when it eventually runs this job.
+        household_id=household_id,
         job_type=job_type,
         url=url,
         use_llm_fallback=use_llm_fallback,

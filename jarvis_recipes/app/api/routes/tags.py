@@ -14,7 +14,7 @@ def list_tags(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    return recipes_service.list_tags_for_user(db, current_user.id)
+    return recipes_service.list_tags_for_user(db, current_user)
 
 
 @router.post("/tags", response_model=TagRead, status_code=status.HTTP_201_CREATED)
@@ -35,7 +35,7 @@ def attach_tag(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    recipe = recipes_service.attach_tag(db, current_user.id, recipe_id, tag_id)
+    recipe = recipes_service.attach_tag(db, current_user, recipe_id, tag_id)
     for tag in recipe.tags:
         if tag.id == tag_id:
             return tag
@@ -49,6 +49,6 @@ def detach_tag(
     db: Session = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    recipes_service.detach_tag(db, current_user.id, recipe_id, tag_id)
+    recipes_service.detach_tag(db, current_user, recipe_id, tag_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

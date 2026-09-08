@@ -49,6 +49,51 @@ def get_queue(queue_name: str) -> Queue:
     return _queues[queue_name]
 
 
+def ocr_queues() -> list[str]:
+    """The OCR queues to fan out to, from OCR_QUEUES."""
+    settings = get_settings()
+    names = [q.strip() for q in (settings.ocr_queues or "").split(",") if q.strip()]
+    return names or [QUEUE_OCR]
+
+
+def schedule_join_deadline(workflow_id: str, ingestion_id: str, delay_seconds: Optional[int] = None) -> None:
+    """Wake the recipes worker later to release a join that is still waiting.
+
+    Without this a partial set never continues: the remaining hosts are the ones
+    that will never answer, so no further completion arrives to notice the
+    timeout. The handler is a no-op when the join has already been claimed.
+    """
+    from datetime import timedelta
+
+    settings = get_settings()
+    delay = settings.ocr_join_timeout_seconds if delay_seconds is None else delay_seconds
+    envelope = create_envelope(
+        job_type="ocr.join_deadline",
+        job_id=f"{workflow_id}:join-deadline",
+        workflow_id=workflow_id,
+        source="jarvis-recipes-server",
+        target="jarvis-recipes-server",
+        payload={"ingestion_id": ingestion_id},
+    )
+    try:
+        queue = get_queue(QUEUE_RECIPES)
+        queue.enqueue_in(
+            timedelta(seconds=delay),
+            "jarvis_recipes.app.services.queue_worker.process_job",
+            json.dumps(envelope),
+            # Deterministic id so several arriving readings schedule ONE timer
+            # rather than one each.
+            job_id=f"{workflow_id}:join-deadline",
+            job_timeout="10m",
+        )
+        logger.info("Scheduled OCR join deadline for workflow %s in %ss", workflow_id, delay)
+    except Exception as exc:  # noqa: BLE001
+        # Best effort. Losing the timer means a partial join waits for a reading
+        # that never comes, which the stale-job reaper still catches -- worth a
+        # loud log, not worth failing the enqueue that already succeeded.
+        logger.warning("Could not schedule OCR join deadline for %s: %s", workflow_id, exc)
+
+
 def create_envelope(
     job_type: str,
     job_id: str,
@@ -103,9 +148,9 @@ def enqueue_ocr_request(
     image_refs: list[Dict[str, Any]],  # List of {"kind": "s3", "value": "s3://bucket/key", "index": 0}
     options: Optional[Dict[str, Any]] = None,
     request_id: Optional[str] = None,
-) -> None:
+) -> int:
     """
-    Enqueue an OCR extraction request directly to the OCR service queue.
+    Enqueue an OCR extraction request to every OCR host. Returns how many were sent.
     
     This implements the fast-path routing: image requests go directly to OCR queue.
     Uses raw Redis operations (not RQ) since OCR service is a separate microservice.
@@ -135,13 +180,23 @@ def enqueue_ocr_request(
             request_id=request_id,
         )
         
-        # Use raw Redis LPUSH for cross-service queue (per PRD: "V1 can use Redis Lists")
-        # OCR service will consume from this queue using its own worker
+        # Fanned out to EVERY OCR host, not load balanced across them. Each runs
+        # different engines and they fail differently; the readings are joined
+        # before the LLM sees them (services/ocr_join). A single configured queue
+        # is the old behaviour exactly.
+        #
+        # Raw Redis LPUSH for the cross-service hop (per PRD: "V1 can use Redis
+        # Lists"); each OCR host BRPOPs its own queue.
         conn = get_redis_connection()
-        envelope_json = json.dumps(envelope)
-        conn.lpush(QUEUE_OCR, envelope_json.encode('utf-8'))
-        
-        logger.info("Enqueued OCR request %s (workflow %s) to %s", job_id, workflow_id, QUEUE_OCR)
+        envelope_json = json.dumps(envelope).encode("utf-8")
+        queues = ocr_queues()
+        for queue_name in queues:
+            conn.lpush(queue_name, envelope_json)
+
+        logger.info(
+            "Enqueued OCR request %s (workflow %s) to %s", job_id, workflow_id, ", ".join(queues)
+        )
+        return len(queues)
     except Exception as exc:
         logger.exception("Failed to enqueue OCR request %s: %s", job_id, exc)
         raise

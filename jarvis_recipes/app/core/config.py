@@ -17,26 +17,17 @@ class Settings(BaseSettings):
     # shipped default keeps running). Set JARVIS_ENV=production in prod.
     jarvis_env: str = Field("development", alias="JARVIS_ENV")
     llm_base_url: str | None = Field(None, alias="LLM_BASE_URL")
-    llm_full_model_name: str = Field("live", alias="JARVIS_FULL_MODEL_NAME")
-    llm_lightweight_model_name: str = Field("live", alias="JARVIS_LIGHTWEIGHT_MODEL_NAME")
-    llm_recipe_queue_max_retries: int = Field(3, alias="LLM_RECIPE_QUEUE_MAX_RETRIES")
+    # Model names, queue retries, parse-job abandon window, image size cap and the
+    # scraper User-Agent used to live here. They are runtime knobs, so they now live
+    # in the settings DB (services/settings_service.py) with the same env vars as
+    # env_fallback. Only secrets, discovery and bootstrap values belong in this file.
     jarvis_app_id: str | None = Field(None, alias="JARVIS_APP_ID")
     jarvis_app_key: str | None = Field(None, alias="JARVIS_APP_KEY")
-    recipe_parse_job_abandon_minutes: int = Field(4320, alias="RECIPE_PARSE_JOB_ABANDON_MINUTES")
-    recipe_image_max_bytes: int = Field(10 * 1024 * 1024, alias="RECIPE_IMAGE_MAX_BYTES")
-    recipe_ocr_tier_max: int = Field(1, alias="RECIPE_OCR_TIER_MAX")  # Only OCR tier now (vision/cloud handled by OCR service)
-    scraper_user_agent: str = Field(
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        alias="SCRAPER_USER_AGENT",
-    )
     scraper_cookies: str | None = Field(None, alias="SCRAPER_COOKIES")
     # Legacy S3 config (kept for backwards compatibility)
     recipe_image_s3_bucket: str | None = Field(None, alias="RECIPE_IMAGE_S3_BUCKET")
     recipe_image_s3_region: str | None = Field(None, alias="RECIPE_IMAGE_S3_REGION")
     recipe_image_s3_prefix: str = Field("recipe-images", alias="RECIPE_IMAGE_S3_PREFIX")
-    recipe_image_s3_presign_ttl_seconds: int = Field(
-        3600, alias="RECIPE_IMAGE_S3_PRESIGN_TTL_SECONDS"
-    )
     
     # New unified object store config (per PRD s3-to-minio.md)
     object_store_provider: str = Field("minio", alias="OBJECT_STORE_PROVIDER")  # "minio" or "s3"
@@ -52,6 +43,15 @@ class Settings(BaseSettings):
     jarvis_ocr_service_url: str | None = Field(None, alias="JARVIS_OCR_SERVICE_URL")
     # OCR service uses same auth as LLM proxy
     # (jarvis_app_id and jarvis_app_key are reused)
+    # Every OCR host gets its own queue and every image goes to all of them; the
+    # readings are joined before the LLM sees them (services/ocr_join). Comma
+    # separated. The default is the single shared queue, which behaves exactly as
+    # before -- one host, one reading, no join to wait for.
+    ocr_queues: str = Field("jarvis.ocr.jobs", alias="OCR_QUEUES")
+    # How long to wait for the slower hosts once the first has answered. Past
+    # this the pipeline continues with whatever arrived: a sleeping Mac costs its
+    # reading, not the import.
+    ocr_join_timeout_seconds: int = Field(90, alias="OCR_JOIN_TIMEOUT_SECONDS")
     redis_host: str = Field("localhost", alias="REDIS_HOST")
     redis_port: int = Field(6379, alias="REDIS_PORT")
     redis_password: str | None = Field(None, alias="REDIS_PASSWORD")
