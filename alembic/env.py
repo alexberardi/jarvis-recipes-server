@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from jarvis_recipes.app.core.config import get_settings
+from jarvis_recipes.app.db.bootstrap import ensure_database
 from jarvis_recipes.app.db.base import Base
 from jarvis_recipes.app.db import models  # noqa: F401
 
@@ -31,6 +32,9 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     settings = get_settings()
+    # The database may not exist yet: init-db.sh only runs on a first boot, so a
+    # service added to an existing install has to provision its own.
+    ensure_database(settings.database_url)
     configuration = config.get_section(config.config_ini_section) or {}
     configuration["sqlalchemy.url"] = settings.database_url
 
