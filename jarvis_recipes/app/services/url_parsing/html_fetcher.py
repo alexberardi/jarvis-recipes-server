@@ -341,6 +341,15 @@ async def fetch_html(url: str) -> str:
     if await _host_blocked(parsed_url.hostname):
         raise ValueError("URL points to a private or disallowed host")
 
+    # No Accept-Encoding here on purpose. httpx sets it from the codecs it can
+    # actually decode; hardcoding "gzip, deflate, br" claimed brotli support the
+    # image did not have, so any site that honours br (most CDNs prefer it)
+    # returned brotli bytes httpx passed through undecoded. That arrives as
+    # binary, fails the HTML validity check
+    # (printable_ratio=0.42, control_ratio=0.12) and the import dies with
+    # "HTML content appears corrupted or invalid encoding" -- for a page that
+    # served perfectly well. brotli is now a dependency, so httpx advertises br
+    # on its own and the request stays browser-shaped without lying.
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -349,7 +358,6 @@ async def fetch_html(url: str) -> str:
         ),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
         "Referer": "https://www.google.com/",
         "Connection": "keep-alive",
     }
