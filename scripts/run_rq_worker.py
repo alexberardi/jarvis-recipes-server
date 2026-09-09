@@ -17,6 +17,7 @@ import time
 from rq import Worker
 from rq.connections import push_connection
 
+from jarvis_recipes.app.core import service_config
 from jarvis_recipes.app.core.config import get_settings
 from jarvis_recipes.app.core.logging_config import (
     setup_console_logging,
@@ -47,6 +48,23 @@ def setup_cleanup():
 def main():
     """Start RQ worker with graceful error handling."""
     settings = get_settings()
+
+    # Service discovery has to be started here as well as in the API. Every
+    # lookup goes through service_config._get_url, which consults config-service
+    # only when init() has run -- and init() lived solely in the FastAPI startup
+    # event, which this process never executes. So the worker silently skipped
+    # discovery and fell through to env vars that a discovery-based install does
+    # not set.
+    #
+    # The worker is where the LLM work actually happens (structuring OCR text,
+    # generating meal plans), so the failure surfaced as
+    # "LLM proxy URL is not configured" from a container that had
+    # JARVIS_CONFIG_URL set and a perfectly healthy llm-proxy registered.
+    if service_config.init():
+        logger.info("Service discovery initialized")
+    else:
+        logger.info("Using environment variables for service URLs")
+
     logger.info("Starting RQ worker for queues: %s", ", ".join(QUEUE_NAMES))
     logger.info("Redis connection: %s:%s", settings.redis_host, settings.redis_port)
     
