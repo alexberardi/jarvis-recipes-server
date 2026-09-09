@@ -15,6 +15,7 @@ from jarvis_recipes.app.services.settings_service import (
     DEFAULT_IMAGE_MAX_BYTES,
     get_settings_service,
 )
+from jarvis_recipes.app.services.user_service import ensure_user
 from io import BytesIO
 
 # Enable HEIC/HEIF support if pillow-heif is installed.
@@ -123,6 +124,7 @@ async def submit_recipe_from_image_job(
                 detail=f"Failed to upload images: {exc}",
             ) from exc
 
+    ensure_user(db, current_user.id)
     ingestion = models.RecipeIngestion(
         id=ingestion_id,
         user_id=str(current_user.id),

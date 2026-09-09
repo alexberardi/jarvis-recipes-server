@@ -21,6 +21,7 @@ from jarvis_recipes.app.schemas.meal_plan import (
     Alternative,
 )
 from jarvis_recipes.app.services import llm_client, mailbox_service, static_recipe_service
+from jarvis_recipes.app.services.user_service import ensure_user
 
 MEAL_ORDER: List[MealType] = ["breakfast", "lunch", "dinner", "snack", "dessert"]
 
@@ -167,6 +168,7 @@ def get_recipe_details(db: Session, user_id: str, source: str, recipe_id: str) -
 
 
 def create_stage_recipe(db: Session, user_id: str, source_recipe: Dict[str, Any], request_id: str) -> str:
+    ensure_user(db, user_id)
     expires_at = datetime.utcnow() + timedelta(hours=72)
     # The id is assigned by the database now rather than generated here; see
     # migration f6a7b8c9d0e1 for why it stopped being a UUID.

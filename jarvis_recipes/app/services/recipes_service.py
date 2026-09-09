@@ -10,15 +10,7 @@ from jarvis_recipes.app.schemas.auth import CurrentUser
 from jarvis_recipes.app.services.scoping import household_for_write, visible_to
 from jarvis_recipes.app.schemas.recipe import IngredientCreate, RecipeCreate, RecipeUpdate
 from jarvis_recipes.app.services.quantity_parser import parse_quantity_display
-
-
-def _ensure_user(db: Session, user_id: str) -> models.User:
-    user = db.get(models.User, user_id)
-    if user is None:
-        user = models.User(user_id=user_id)
-        db.add(user)
-        db.flush()
-    return user
+from jarvis_recipes.app.services.user_service import ensure_user
 
 
 def _get_or_create_tag(db: Session, name: str) -> models.Tag:
@@ -74,7 +66,7 @@ def _replace_ingredients(recipe: models.Recipe, ingredients: Iterable[Ingredient
 
 def create_recipe(db: Session, user: CurrentUser, data: RecipeCreate) -> models.Recipe:
     user_id_str = str(user.id)
-    _ensure_user(db, user_id_str)
+    ensure_user(db, user_id_str)
     total_time = data.total_time_minutes
     if total_time is None and (data.prep_time_minutes is not None or data.cook_time_minutes is not None):
         total_time = (data.prep_time_minutes or 0) + (data.cook_time_minutes or 0)
