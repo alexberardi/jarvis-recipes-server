@@ -4,9 +4,11 @@ from typing import Any, Dict
 from sqlalchemy.orm import Session
 
 from jarvis_recipes.app.db import models
+from jarvis_recipes.app.services.user_service import ensure_user
 
 
 def publish(db: Session, user_id: str, msg_type: str, payload: Dict[str, Any]) -> models.MailboxMessage:
+    ensure_user(db, user_id)
     message = models.MailboxMessage(
         id=str(uuid.uuid4()),
         user_id=str(user_id),

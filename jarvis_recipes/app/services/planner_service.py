@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from jarvis_recipes.app.db import models
 from jarvis_recipes.app.schemas.auth import CurrentUser
 from jarvis_recipes.app.services.scoping import household_for_write, visible_to
+from jarvis_recipes.app.services.user_service import ensure_user
 from jarvis_recipes.app.schemas.planner import (
     MealPlanCreate,
     MealPlanSummary,
@@ -15,16 +16,6 @@ from jarvis_recipes.app.schemas.planner import (
     PlannerDraftRequest,
     PlannerDraftResponse,
 )
-
-
-def _ensure_user(db: Session, user_id: int) -> models.User:
-    user_id_str = str(user_id)
-    user = db.get(models.User, user_id_str)
-    if user is None:
-        user = models.User(user_id=user_id_str)
-        db.add(user)
-        db.flush()
-    return user
 
 
 def draft_plan(data: PlannerDraftRequest) -> PlannerDraftResponse:
@@ -85,7 +76,7 @@ def _materialise_stage_recipe(db: Session, user: CurrentUser, stage_id: int) -> 
 
 
 def commit_plan(db: Session, user: CurrentUser, data: MealPlanCreate) -> models.MealPlan:
-    _ensure_user(db, str(user.id))
+    ensure_user(db, str(user.id))
     meal_plan = models.MealPlan(
         user_id=str(user.id),
         household_id=household_for_write(user),
