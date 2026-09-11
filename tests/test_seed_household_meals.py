@@ -140,3 +140,66 @@ def test_purge_dry_run_deletes_nothing(seeder, db_session):
     seeder.purge(db_session, dry_run=True)
 
     assert db_session.query(models.Recipe).count() == before
+
+
+# --- the marker tag is optional -------------------------------------------
+#
+# The tag is bookkeeping, not something the cook wants in the app's tag picker
+# next to "dinner" and "steak" -- so prod seeds without it. That removes what
+# --purge normally keys on, hence the title fallback below.
+
+
+def test_no_seed_tag_keeps_the_tag_picker_clean(seeder, db_session):
+    seeder.seed(db_session, USER, HOUSEHOLD, dry_run=False, seed_tag=False)
+
+    for recipe in db_session.query(models.Recipe).all():
+        names = {t.name for t in recipe.tags}
+        assert seeder.SEED_TAG not in names, f"{recipe.title} still carries the marker"
+        # The tags a cook actually wants must survive.
+        assert "dinner" in names
+
+    assert (
+        db_session.query(models.Tag).filter(models.Tag.name == seeder.SEED_TAG).first()
+        is None
+    ), "the marker tag was created even though it was not applied"
+
+
+def test_purge_falls_back_to_titles_when_untagged(seeder, db_session):
+    seeder.seed(db_session, USER, HOUSEHOLD, dry_run=False, seed_tag=False)
+
+    mine = models.Recipe(
+        user_id=USER, household_id=HOUSEHOLD, title="Nonna's Sunday Gravy",
+        source_type=models.SourceType.MANUAL, servings=6,
+    )
+    db_session.add(mine)
+    db_session.commit()
+
+    removed = seeder.purge(db_session, dry_run=False, user_id=USER)
+
+    assert removed == len(seeder.RECIPES)
+    assert [r.title for r in db_session.query(models.Recipe).all()] == [
+        "Nonna's Sunday Gravy"
+    ]
+
+
+def test_untagged_purge_without_a_user_refuses_rather_than_guessing(seeder, db_session):
+    seeder.seed(db_session, USER, HOUSEHOLD, dry_run=False, seed_tag=False)
+    before = db_session.query(models.Recipe).count()
+
+    removed = seeder.purge(db_session, dry_run=False, user_id=None)
+
+    assert removed == 0
+    assert db_session.query(models.Recipe).count() == before
+
+
+def test_untagged_purge_leaves_another_users_rows_alone(seeder, db_session):
+    """Title matching is per-user, so the other person's copy must survive."""
+    seeder.seed(db_session, USER, HOUSEHOLD, dry_run=False, seed_tag=False)
+    seeder.seed(db_session, "2", HOUSEHOLD, dry_run=False, seed_tag=False)
+
+    removed = seeder.purge(db_session, dry_run=False, user_id=USER)
+
+    assert removed == len(seeder.RECIPES)
+    survivors = db_session.query(models.Recipe).all()
+    assert len(survivors) == len(seeder.RECIPES)
+    assert {r.user_id for r in survivors} == {"2"}

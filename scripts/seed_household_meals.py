@@ -440,7 +440,13 @@ def _describe(minutes: int, title: str) -> str:
     return f"{base}. {note}" if note else base
 
 
-def seed(db, user_id: str, household_id: str | None, dry_run: bool) -> tuple[int, int]:
+def seed(
+    db,
+    user_id: str,
+    household_id: str | None,
+    dry_run: bool,
+    seed_tag: bool = True,
+) -> tuple[int, int]:
     """Returns (created, skipped)."""
     created = skipped = 0
 
@@ -477,7 +483,12 @@ def seed(db, user_id: str, household_id: str | None, dry_run: bool) -> tuple[int
         # type <Recipe> not in session") and silently drops the association.
         db.add(recipe)
 
-        recipe.tags.append(_get_tag(db, SEED_TAG))
+        # The marker tag is a bookkeeping device, not something the cook wants
+        # to see: it shows up in the app's tag picker next to "dinner" and
+        # "steak". Off for a real household, on for dev where being able to
+        # purge cleanly matters more than a tidy picker.
+        if seed_tag:
+            recipe.tags.append(_get_tag(db, SEED_TAG))
         recipe.tags.append(_get_tag(db, "dinner"))
         for tag_name in extra_tags:
             recipe.tags.append(_get_tag(db, tag_name))
@@ -504,14 +515,37 @@ def seed(db, user_id: str, household_id: str | None, dry_run: bool) -> tuple[int
     return created, skipped
 
 
-def purge(db, dry_run: bool) -> int:
-    """Delete only what this script created, found via the seed tag."""
-    tag = db.query(models.Tag).filter(models.Tag.name == SEED_TAG).first()
-    if not tag:
-        print("  nothing tagged " + SEED_TAG)
-        return 0
+def purge(db, dry_run: bool, user_id: str | None = None) -> int:
+    """Delete only what this script created.
 
-    recipes = list(tag.recipes)
+    Prefers the marker tag, which is exact. Rows seeded with --no-seed-tag have
+    no marker, so fall back to matching this script's titles for one user --
+    which needs --user-id, and is less precise: if the cook has since written
+    their own "Tacos", that row matches too. Every row is printed before
+    deletion for exactly that reason.
+    """
+    tag = db.query(models.Tag).filter(models.Tag.name == SEED_TAG).first()
+    if tag and tag.recipes:
+        recipes = list(tag.recipes)
+    else:
+        if not user_id:
+            print(
+                f"  nothing tagged {SEED_TAG}. If these were seeded with "
+                "--no-seed-tag, pass --user-id to match them by title instead."
+            )
+            return 0
+        titles = [r[0] for r in RECIPES]
+        recipes = (
+            db.query(models.Recipe)
+            .filter(models.Recipe.user_id == user_id, models.Recipe.title.in_(titles))
+            .all()
+        )
+        if recipes:
+            print(
+                f"  no {SEED_TAG} tag -- matching {len(recipes)} row(s) by title for "
+                f"user {user_id}. Check the list below: a recipe the cook wrote "
+                "themselves under one of these names would also match."
+            )
     for recipe in recipes:
         print(f"  delete  {recipe.title}  (id={recipe.id}, user={recipe.user_id})")
         if not dry_run:
@@ -536,6 +570,12 @@ def main() -> int:
         action="store_true",
         help="Seed with household_id NULL -- visible only to the author. Rarely what you want.",
     )
+    parser.add_argument(
+        "--no-seed-tag",
+        action="store_true",
+        help=f"Do not tag rows {SEED_TAG}. Keeps the app's tag picker clean for a "
+        "real household; --purge then needs --user-id to find them by title.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print the plan, write nothing.")
     parser.add_argument("--purge", action="store_true", help=f"Delete rows tagged {SEED_TAG}.")
     args = parser.parse_args()
@@ -544,7 +584,7 @@ def main() -> int:
     try:
         if args.purge:
             print(f"PURGE{' (dry run)' if args.dry_run else ''}")
-            removed = purge(db, args.dry_run)
+            removed = purge(db, args.dry_run, str(args.user_id) if args.user_id else None)
             print(f"\n{removed} recipe(s) {'would be ' if args.dry_run else ''}removed.")
             return 0
 
@@ -559,9 +599,16 @@ def main() -> int:
         print(f"SEED{' (dry run)' if args.dry_run else ''}")
         print(f"  user_id      {args.user_id}")
         print(f"  household_id {args.household_id or 'NULL (author-only)'}")
-        print(f"  recipes      {len(RECIPES)}\n")
+        print(f"  recipes      {len(RECIPES)}")
+        print(f"  marker tag   {SEED_TAG if not args.no_seed_tag else 'none (--no-seed-tag)'}\n")
 
-        created, skipped = seed(db, str(args.user_id), args.household_id, args.dry_run)
+        created, skipped = seed(
+            db,
+            str(args.user_id),
+            args.household_id,
+            args.dry_run,
+            seed_tag=not args.no_seed_tag,
+        )
         verb = "would be created" if args.dry_run else "created"
         print(f"\n{created} {verb}, {skipped} already present.")
         return 0
