@@ -102,3 +102,22 @@ class MealPlanSummary(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+
+class MealPlanItemMove(BaseModel):
+    """Where one already-planned meal should end up."""
+
+    item_id: int
+    date: date
+    meal_type: str
+
+
+class MealPlanItemMoveRequest(BaseModel):
+    """Rearrange a saved plan without rebuilding it.
+
+    A list rather than a single move so a swap arrives as one atomic request:
+    two separate calls would leave the plan with both meals on the same day in
+    between, which the client would then have to unwind if the second failed.
+    """
+
+    moves: List[MealPlanItemMove]
