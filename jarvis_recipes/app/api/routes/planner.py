@@ -5,6 +5,7 @@ from jarvis_recipes.app.api.deps import get_current_user, get_db_session
 from jarvis_recipes.app.schemas.auth import CurrentUser
 from jarvis_recipes.app.schemas.planner import (
     MealPlanCreate,
+    MealPlanItemMoveRequest,
     MealPlanRead,
     MealPlanSummary,
     PlannerDraftRequest,
@@ -72,3 +73,19 @@ def delete_plan(
 ):
     planner_service.delete_plan(db, current_user, plan_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/plans/{plan_id}/items", response_model=MealPlanRead)
+def move_plan_items(
+    plan_id: int,
+    data: MealPlanItemMoveRequest,
+    db: Session = Depends(get_db_session),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Rearrange a saved plan in place.
+
+    PATCH rather than PUT: the body names only the meals that moved, so a
+    client that has not refetched cannot silently drop the ones it does not
+    know about.
+    """
+    return planner_service.move_plan_items(db, current_user, plan_id, data.moves)

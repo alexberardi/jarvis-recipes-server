@@ -200,3 +200,80 @@ def delete_plan(db: Session, user: CurrentUser, plan_id: int) -> None:
     db.delete(plan)
     db.commit()
 
+
+
+def move_plan_items(
+    db: Session, user: CurrentUser, plan_id: int, moves: list
+) -> models.MealPlan:
+    """Rearrange a saved plan's meals without rebuilding it.
+
+    Editing in place matters: the alternative is delete-and-recommit, which
+    churns the plan id, drops it out of "what are we eating" mid-edit, and
+    would re-materialise staged recipes that commit already turned into real
+    ones.
+
+    Collisions are resolved the way the gesture reads. Moving Tuesday's dinner
+    onto Thursday, where a dinner already sits, SWAPS them -- the occupant takes
+    the vacated slot rather than the request failing, because "move it to
+    Thursday" plainly means a swap and an error there would be pedantry. Two
+    moves aimed at the same slot in one request are rejected instead: that is
+    the client contradicting itself, and guessing which should win would hide
+    the bug.
+
+    start_date is recomputed from the items afterwards. It is stored on the plan
+    but derived from them, and moving the earliest meal would otherwise leave it
+    pointing at a day the plan no longer covers -- which is what the shopping
+    list and "current plan" both read.
+    """
+    plan = get_plan(db, user, plan_id)
+
+    by_id = {item.id: item for item in plan.items}
+    requested: dict[int, tuple] = {}
+    for move in moves:
+        item = by_id.get(move.item_id)
+        if item is None:
+            # 404 rather than 400: the id either belongs to another plan or does
+            # not exist, and saying which confirms it exists.
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Item {move.item_id} is not part of this plan",
+            )
+        requested[move.item_id] = (move.date, move.meal_type)
+
+    if not requested:
+        return plan
+
+    targets = list(requested.values())
+    if len(set(targets)) != len(targets):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Two meals cannot be moved to the same day and meal type",
+        )
+
+    # Where each moving item came from, so a displaced occupant has somewhere to
+    # go. Read before anything is mutated.
+    vacated = {item_id: (by_id[item_id].date, by_id[item_id].meal_type) for item_id in requested}
+
+    for item_id, (new_date, new_meal) in requested.items():
+        occupant = next(
+            (
+                other
+                for other in plan.items
+                if other.id != item_id
+                and other.id not in requested
+                and other.date == new_date
+                and other.meal_type == new_meal
+            ),
+            None,
+        )
+        if occupant is not None:
+            occupant.date, occupant.meal_type = vacated[item_id]
+        by_id[item_id].date = new_date
+        by_id[item_id].meal_type = new_meal
+
+    if plan.items:
+        plan.start_date = min(item.date for item in plan.items)
+
+    db.commit()
+    db.refresh(plan)
+    return plan
