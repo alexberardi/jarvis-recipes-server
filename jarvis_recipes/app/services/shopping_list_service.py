@@ -38,7 +38,10 @@ _PREP_SUFFIX = re.compile(
     r"|melted|softened|drained|rinsed|peeled|beaten|sifted|leveled|to taste).*$",
     re.I,
 )
-_LEADING_QTY = re.compile(r"^\s*[\d¼-¾⅐-⅞./\s-]+")
+# The trailing lookahead matters: without it "2% milk" loses its 2 and groups
+# under "% milk". A quantity is always followed by a space or ends the string;
+# a digit glued to what follows is part of the name.
+_LEADING_QTY = re.compile(r"^\s*[\d¼-¾⅐-⅞./\s-]+(?=\s|$)")
 
 # Stripped after the quantity: the unit lives in its own column, so leaving it in
 # the name gives "lb beef sirloin" and "beef sirloin" as two separate lines.
@@ -56,17 +59,43 @@ _LEADING_UNIT = re.compile(rf"^(?:{'|'.join(_UNITS)})\b\.?\s*", re.I)
 # Handles the no-comma case: "Salt and black pepper to taste".
 _TRAILING_TO_TASTE = re.compile(r"\s+to taste\s*$", re.I)
 
+# Parenthetical asides: the same ingredient written with a different note beside
+# it. Without this the shopping list showed
+#
+#   ground beef                        1 lb
+#   lean ground beef                   1.5 lb
+#   lean ground beef (93/7 or leaner)  1.5 lb
+#
+# as three lines, so you buy three times. Only asides are stripped -- an
+# alternative ("or agave"), an optional note, an approximate count, a bare
+# metric or fat ratio. A parenthetical that IDENTIFIES the ingredient
+# ("(korean chili paste)") is left alone, because over-merging is the worse
+# failure: a wrong quantity is invisible in the shop, a duplicate line is not.
+_ASIDE = re.compile(
+    r"\s*\((?:"
+    r"or\s[^)]*"                       # (or agave), (or 2 jarred pieces)
+    r"|optional[^)]*"                  # (optional), (optional, balances heat)
+    r"|about\s[^)]*|approx[^)]*"       # (about 4 medium)
+    r"|store-bought[^)]*"              # (store-bought or homemade)
+    r"|fresh,[^)]*"                    # (fresh, canned, or frozen)
+    r"|[\d.,/\s]+(?:g|kg|ml|l|oz|lb|lbs)?"  # (75g), (50 ml), (225), (93/7)
+    r"|\d+/\d+[^)]*"                   # (93/7 or leaner), (93/7 or 96/4)
+    r")\)",
+    re.I,
+)
+
 
 def normalize_name(text: str) -> str:
     """The grouping key for an ingredient line.
 
-    Strips a leading quantity and a trailing prep clause -- the two things that
-    make the same ingredient look different across recipes. Deliberately shallow:
+    Strips a leading quantity, a trailing prep clause, and parenthetical asides
+    -- the things that make the same ingredient look different across recipes. Deliberately shallow:
     no stemming, no synonyms. Over-merging ("cream" with "sour cream") is worse
     than under-merging, because a wrong quantity is invisible in the shop while a
     duplicate line is obvious.
     """
-    cleaned = _PREP_SUFFIX.sub("", text or "").strip()
+    cleaned = _ASIDE.sub("", text or "").strip()
+    cleaned = _PREP_SUFFIX.sub("", cleaned).strip()
     cleaned = _TRAILING_TO_TASTE.sub("", cleaned).strip()
     cleaned = _LEADING_QTY.sub("", cleaned).strip()
     cleaned = _LEADING_UNIT.sub("", cleaned).strip()
