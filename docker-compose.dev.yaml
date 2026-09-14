@@ -3,7 +3,7 @@ version: "3.9"
 services:
   recipes-api:
     build: .
-    command: bash -c "pip install -q -e . -e /jarvis-config-client -e /jarvis-settings-client && alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 7030 --reload"
+    command: bash -c "pip install -q -e . && pip install -q -e /jarvis-config-client -e /jarvis-settings-client && alembic upgrade head && uvicorn jarvis_recipes.app.main:app --host 0.0.0.0 --port 7030 --reload"
     env_file:
       - .env
     environment:
@@ -36,7 +36,7 @@ services:
 
   parse-worker:
     build: .
-    command: bash -c "pip install -q -e . -e /jarvis-config-client -e /jarvis-settings-client && python scripts/run_rq_worker.py"
+    command: bash -c "pip install -q -e . && pip install -q -e /jarvis-config-client -e /jarvis-settings-client && python scripts/run_rq_worker.py"
     deploy:
       resources:
         limits:
