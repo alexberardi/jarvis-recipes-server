@@ -23,6 +23,7 @@ from jarvis_recipes.app.db import models
 from jarvis_recipes.app.schemas.auth import CurrentUser
 from jarvis_recipes.app.services.scoping import household_for_write, owned_by, visible_to
 from jarvis_recipes.app.services.shopping_list_service import normalize_name
+from jarvis_recipes.app.services.user_service import ensure_user
 
 
 def list_staples(db: Session, user: CurrentUser) -> list[models.Staple]:
@@ -72,6 +73,10 @@ def add_staple(db: Session, user: CurrentUser, text: str) -> models.Staple:
     if existing is not None:
         return existing
 
+    # A staple can be the first thing a new user ever writes, and staples.user_id
+    # is a foreign key -- see user_service for the prod 500 this exact omission
+    # caused on photo import.
+    ensure_user(db, user.id)
     staple = models.Staple(
         user_id=str(user.id),
         household_id=household_for_write(user),

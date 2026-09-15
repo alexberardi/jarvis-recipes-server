@@ -169,7 +169,9 @@ Mobile polls GET /meal-plans/generate/jobs/{job_id}
    The RS256 public key is fetched over plain HTTP and cached for the process lifetime, so a *running* service keeps verifying if jarvis-auth goes down; only a cold start during an outage fails, and it fails closed. Implemented with `httpx` rather than `jarvis-auth-client` on purpose — this service is being decoupled from the stack, and a new Jarvis library dependency just to verify a token moves it the wrong way. `auth.algorithm` was dropped (migration `d4e5f6a7b8c9`): it only ever governed what jarvis-auth *mints*, which is not this service's business.
 6. **Two database URLs (`DATABASE_URL` + `MIGRATIONS_DATABASE_URL`).** `apply_migrations.sh` and `scripts/make_migration.py` prefer the migration URL; it is often the host-network form while `DATABASE_URL` is the container one.
 7. **Every domain route requires a user JWT.** `deps.verify_app_auth` exists and is imported by `main.py`, but it is **not attached to any router** — app-to-app credentials do not open the recipes API. The only app-creds surface is `/settings/*` (reads via combined auth; writes are superuser-JWT only).
-8. **No multi-household scoping.** `household_id` exists only on the `settings` table. Recipes/meal plans are keyed by `user_id`. If you add household scoping, audit every query — there is no filter pattern in place.
+8. **Household scoping goes through `services/scoping.py`, never a hand-written filter.** Recipes, meal plans and staples carry BOTH: `user_id` is authorship (who added it), `household_id` is visibility (who sees it). Use `visible_to(model, user)` to read and `household_for_write(user)` to stamp a new row. The predicate has a NULL arm on purpose — rows created before the household migration keep `household_id = NULL` and stay visible to their author until `scripts/backfill_household_ids.py` runs, so deploying the migration never made anyone's recipes vanish. This replaced 49 hand-written `user_id == current_user.id` filters; one missed filter is a data leak and one over-applied filter is a recipe that disappears, which is why there is exactly one predicate. A caller whose token has no household claim sees only their own rows. Denials are **404, not 403** — a distinct status confirms the id exists, which is a membership oracle.
+
+   One consequence worth knowing: a duplicate can exist where a uniqueness constraint is per author. Two members each add "salt" while both rows are still `household_id = NULL` (neither write can see the other), then the backfill stamps the same household on both. Reads that must show one row have to dedupe; `staples_service.list_staples` is the worked example.
 9. **`GET /recipes/core/{id}` is a stub.** It always 404s; there is no core recipe store.
 10. **`GET /recipes/jobs` is unreachable.** `GET /recipes/{recipe_id}` (int) is registered first, so `"jobs"` fails path validation and the caller gets a 422. Use the `/recipes/parse-url/jobs` alias. Fixing it means moving the literal-path routes above the `/{recipe_id}` routes in `routes/recipes.py`; `tests/test_recipes.py::test_bare_recipes_jobs_path_is_shadowed` pins the current behaviour so the fix can't land silently.
 
@@ -219,6 +221,25 @@ Unless noted, every route below takes a **user JWT** (`Authorization: Bearer <jw
 | POST | `/planner/draft` | interactive draft |
 | POST | `/planner/commit` | persist a drafted plan |
 | GET | `/planner/current` | active plan |
+| PATCH | `/planner/plans/{plan_id}/items` | move meals between days; swaps on collision, 409 for two moves onto one slot |
+
+### Groceries
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/shopping-list` | recomputed VIEW over committed plans for a range — never stored, so re-rolling Thursday just makes the next list right. Items carry `is_staple` |
+| POST | `/grocery/cart` | retailer cart link for a range; queues background SKU matching rather than making a shopper wait. **Excludes staples** |
+| GET | `/grocery/sku-map` | ingredient → SKU mappings |
+| PUT | `/grocery/sku-map` | upsert a mapping |
+| DELETE | `/grocery/sku-map/{mapping_id}` | 204 |
+| GET | `/staples` | what the household always has in, as normalized shopping-list keys |
+| POST | `/staples` | mark one (201, **idempotent** — a toggle has no use for a 409) |
+| DELETE | `/staples/{staple_id}` | 204; removes every duplicate of that name, not just the id |
+
+Staples are **flagged on the list, excluded from the cart**. The two surfaces have
+different duties: a cook needs to know the recipe calls for salt even when not
+buying any, while a cart is an order and should not re-buy it. Never hide an
+ingredient from the list — that is how someone gets halfway through a recipe
+without it.
 
 ### Stock, tags, admin
 | Method | Path | Notes |
@@ -244,19 +265,20 @@ Unless noted, every route below takes a **user JWT** (`Authorization: Bearer <jw
 
 Tables (see `jarvis_recipes/app/db/models.py`):
 - `users` — mirror of the auth user id
-- `recipes` — user-scoped: title, source_type/source_url, image_url, servings, total_time
+- `recipes` — household-scoped (see gotcha 8): title, source_type/source_url, image_url, servings, total_time
 - `ingredients` — **child rows of a recipe** (recipe_id FK), not a shared normalized table
 - `steps` — ordered instruction rows (unique on recipe_id + step_number)
 - `tags` + `recipe_tags` — many-to-many
-- `meal_plans` / `meal_plan_items` — user-scoped plan + per-date/meal-type recipe assignment
+- `meal_plans` / `meal_plan_items` — household-scoped plan + per-date/meal-type recipe assignment
 - `recipe_parse_jobs` — async job tracking (url / image / ingestion / meal_plan_generate)
 - `recipe_ingestions` — image-ingestion attempts + pipeline telemetry
 - `stage_recipes` — parsed-but-uncommitted recipes
 - `mailbox_messages` — worker → API notifications
 - `stock_ingredients` / `stock_units_of_measure` — curated static reference data
-- `settings` — multi-tenant runtime settings (the only table with `household_id`)
+- `staples` — ingredients the household always has in; `name` holds the normalized shopping-list key, not the text a user typed
+- `settings` — multi-tenant runtime settings (scoped by `household_id` / `node_id` / `user_id`)
 
-Migrations: 10 under `alembic/versions/`. Current head is `d4e5f6a7b8c9`. **Use `alembic heads`** — grepping `down_revision` lies, and at least one migration's docstring disagrees with its actual `down_revision`.
+Migrations: 16 under `alembic/versions/`. **Always run `alembic heads`** rather than trusting this line, which has been wrong before — grepping `down_revision` lies, and at least one migration's docstring disagrees with its actual `down_revision`.
 
 ## Config surface
 
