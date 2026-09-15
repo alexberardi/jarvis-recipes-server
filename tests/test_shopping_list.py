@@ -62,6 +62,17 @@ class TestNormalisation:
         b = shopping_list_service.normalize_name("cremini mushrooms")
         assert a == b
 
+    def test_divided_is_a_prep_note_not_an_ingredient(self):
+        """"2 tbsp olive oil, divided" is the same shopping row as "olive oil".
+
+        "divided" says the line gets used in two steps -- it never distinguishes
+        one ingredient from another, so leaving it in produced two rows for the
+        same bottle.
+        """
+        a = shopping_list_service.normalize_name("2 tbsp olive oil, divided")
+        b = shopping_list_service.normalize_name("1 tbsp olive oil")
+        assert a == b == "olive oil"
+
     def test_distinct_ingredients_stay_distinct(self):
         """Over-merging is worse than under-merging: a wrong quantity is invisible
         in the shop, a duplicate line is obvious."""

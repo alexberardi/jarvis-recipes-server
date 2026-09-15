@@ -3,7 +3,7 @@ import importlib
 from fastapi import APIRouter
 
 from jarvis_recipes.app.api.routes import planner
-from jarvis_recipes.app.api.routes import recipes, stock, tags, from_image, grocery, ingestion, meal_plans, shopping
+from jarvis_recipes.app.api.routes import recipes, stock, tags, from_image, grocery, ingestion, meal_plans, shopping, staples
 
 import_routes = importlib.import_module("jarvis_recipes.app.api.routes.import")
 
@@ -17,5 +17,6 @@ api_router.include_router(stock.router)
 api_router.include_router(from_image.router)
 api_router.include_router(meal_plans.router)
 api_router.include_router(shopping.router)
+api_router.include_router(staples.router)
 api_router.include_router(grocery.router)
 
