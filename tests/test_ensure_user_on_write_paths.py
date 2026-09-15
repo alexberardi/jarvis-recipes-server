@@ -26,7 +26,7 @@ from sqlalchemy.pool import StaticPool
 
 from jarvis_recipes.app.db import models
 from jarvis_recipes.app.db.base import Base
-from jarvis_recipes.app.services import mailbox_service, meal_plan_service
+from jarvis_recipes.app.services import mailbox_service, meal_plan_service, staples_service
 from jarvis_recipes.app.services.user_service import ensure_user
 
 USER_ID = "1"
@@ -105,6 +105,24 @@ def test_staging_a_recipe_needs_no_prior_recipe(fk_db):
 
     assert stage_id is not None
     assert fk_db.get(models.User, USER_ID) is not None
+
+
+def test_saving_a_staple_needs_no_prior_recipe(fk_db):
+    """Marking salt as a staple can be the first thing a new user ever does.
+
+    staples.user_id is a foreign key, so without ensure_user this is a 500 for
+    anyone who has not already saved a recipe -- the same order-dependent bug
+    photo import had. It shipped green because the shared fixture leaves SQLite's
+    foreign keys off; this file's engine turns them on.
+    """
+    from jarvis_recipes.app.schemas.auth import CurrentUser
+
+    user = CurrentUser(id=4242, household_id=None)
+
+    staple = staples_service.add_staple(fk_db, user, "2 tbsp olive oil")
+
+    assert staple.name == "olive oil"
+    assert fk_db.get(models.User, "4242") is not None
 
 
 def test_an_ingestion_needs_no_prior_recipe(fk_db):
