@@ -324,3 +324,35 @@ class StockUnitOfMeasure(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
+
+class Staple(Base):
+    """An ingredient the household always has in, so it need not be shopped for.
+
+    Salt, oil and pepper appear in most recipes and on every list, where they
+    crowd out the things you actually have to buy. A staple is still shown --
+    hiding an ingredient is how someone ends up mid-recipe without it -- but it
+    is grouped away from the list proper and left out of the cart.
+    """
+
+    __tablename__ = "staples"
+
+    id = Column(Integer, primary_key=True)
+    # Same authorship/visibility split as Recipe: user_id records who added it,
+    # household_id decides who sees it. "We always have olive oil" is a fact
+    # about a kitchen, not about a person.
+    user_id = Column(String, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    household_id = Column(String(255), nullable=True, index=True)
+    # The shopping-list KEY, i.e. shopping_list_service.normalize_name() output,
+    # not the text the user typed. The list groups by that key, so storing
+    # anything else here would match nothing -- "2 tbsp Olive Oil" and
+    # "olive oil" have to land on the same row.
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        # Per author rather than per household: two members can each add "salt"
+        # without a constraint violation, and reads dedupe by name. A household
+        # constraint would fail the second member's write for no good reason.
+        UniqueConstraint("user_id", "name", name="uq_staple_user_name"),
+    )

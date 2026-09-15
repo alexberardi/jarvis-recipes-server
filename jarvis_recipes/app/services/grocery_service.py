@@ -37,7 +37,7 @@ from sqlalchemy.orm import Session
 
 from jarvis_recipes.app.db import models
 from jarvis_recipes.app.schemas.auth import CurrentUser
-from jarvis_recipes.app.services import shopping_list_service
+from jarvis_recipes.app.services import shopping_list_service, staples_service
 from jarvis_recipes.app.services.scoping import household_for_write, visible_to
 
 logger = logging.getLogger(__name__)
@@ -259,7 +259,18 @@ def build_cart(
     if retailer not in RETAILERS:
         raise ValueError(f"Unsupported retailer: {retailer}")
 
-    items = shopping_list_service.build(db, user, start_date, end_date)
+    # Staples are excluded outright rather than flagged: a cart is an order, and
+    # the point of marking salt as always-in-stock is not to buy it again. The
+    # LIST still shows them (grouped away) because someone cooking needs to know
+    # the recipe calls for salt; a cart has no such duty.
+    staples = staples_service.staple_names(db, user)
+    items = [
+        i
+        for i in shopping_list_service.build(
+            db, user, start_date, end_date, staple_names=staples
+        )
+        if not i.is_staple
+    ]
     mappings = {m.ingredient_name: m for m in list_map(db, user, retailer)}
 
     matched: list[CartItem] = []

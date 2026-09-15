@@ -18,6 +18,7 @@ both and decide.
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -35,7 +36,9 @@ from jarvis_recipes.app.services.scoping import visible_to
 _PREP_SUFFIX = re.compile(
     r",\s*(?:finely\s+|thinly\s+|roughly\s+)?"
     r"(?:chopped|diced|sliced|minced|grated|shredded|crumbled|cubed|quartered|halved"
-    r"|melted|softened|drained|rinsed|peeled|beaten|sifted|leveled|to taste).*$",
+    # "divided" says the line is used in two steps, never which ingredient it is,
+    # so "olive oil, divided" and "olive oil" are the same shopping row.
+    r"|melted|softened|drained|rinsed|peeled|beaten|sifted|leveled|divided|to taste).*$",
     re.I,
 )
 # The trailing lookahead matters: without it "2% milk" loses its 2 and groups
@@ -117,6 +120,12 @@ class ShoppingItem:
     amounts: list[Amount]
     #  Which recipes asked for it, so a surprising line can be traced back.
     recipes: list[str]
+    #  Always in the cupboard, so not worth a trip. Still listed -- dropping an
+    #  ingredient is how someone ends up mid-recipe without it -- but the client
+    #  groups these away and the cart skips them. Set from the names the CALLER
+    #  passes in: this module does not know about staples_service, which imports
+    #  normalize_name from here and would otherwise be a circular import.
+    is_staple: bool = False
 
 
 def _to_decimal(value) -> Decimal | None:
@@ -150,8 +159,21 @@ def plans_in_range(
     return list(db.scalars(stmt).all())
 
 
-def build(db: Session, user: CurrentUser, start: date, end: date) -> list[ShoppingItem]:
-    """Aggregate every ingredient needed between two dates, inclusive."""
+def build(
+    db: Session,
+    user: CurrentUser,
+    start: date,
+    end: date,
+    staple_names: Collection[str] = (),
+) -> list[ShoppingItem]:
+    """Aggregate every ingredient needed between two dates, inclusive.
+
+    `staple_names` are shopping-list keys (this module's own normalize_name
+    output) to flag as always-in-stock. Defaulting to empty keeps every existing
+    caller honest: a caller that does not care gets today's behaviour, and one
+    that does has to say so.
+    """
+    staples = set(staple_names)
     grouped: dict[str, ShoppingItem] = {}
 
     for plan in plans_in_range(db, user, start, end):
@@ -182,5 +204,8 @@ def build(db: Session, user: CurrentUser, start: date, end: date) -> list[Shoppi
                     existing.unparsed.append(ing.text)
                 else:
                     existing.quantity = (existing.quantity or Decimal(0)) + qty
+
+    for entry in grouped.values():
+        entry.is_staple = entry.name in staples
 
     return sorted(grouped.values(), key=lambda i: i.name)
