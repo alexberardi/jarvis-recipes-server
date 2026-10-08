@@ -1,6 +1,15 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _number_as_text(value: Any) -> Any:
+    """LLMs answer `4` where the schema says text; accept it as "4"."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return str(value)
+    return value
 
 
 class RecipeDraftIngredient(BaseModel):
@@ -8,6 +17,8 @@ class RecipeDraftIngredient(BaseModel):
     quantity: Optional[str] = None
     unit: Optional[str] = None
     notes: Optional[str] = None
+
+    _quantity_text = field_validator("quantity", mode="before")(_number_as_text)
 
 
 class RecipeDraftSource(BaseModel):
@@ -27,6 +38,8 @@ class RecipeDraft(BaseModel):
     servings: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     source: RecipeDraftSource
+
+    _servings_text = field_validator("servings", mode="before")(_number_as_text)
 
     def validate_minimums(self) -> None:
         if not self.title or len(self.title) < 3:

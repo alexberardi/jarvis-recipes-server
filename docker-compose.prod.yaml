@@ -29,8 +29,9 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       
       # Authentication
-      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY is required}
-      AUTH_ALGORITHM: ${AUTH_ALGORITHM:-HS256}
+      # Unset on jarvisd (RS256 only); set only for a legacy HS256 jarvis-auth.
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-}
+      RECIPES_PUBLIC_URL: ${RECIPES_PUBLIC_URL:-}
       
       # LLM Configuration
       LLM_BASE_URL: ${LLM_BASE_URL:?LLM_BASE_URL is required}
@@ -85,8 +86,9 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       
       # Authentication
-      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY is required}
-      AUTH_ALGORITHM: ${AUTH_ALGORITHM:-HS256}
+      # Unset on jarvisd (RS256 only); set only for a legacy HS256 jarvis-auth.
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-}
+      RECIPES_PUBLIC_URL: ${RECIPES_PUBLIC_URL:-}
       
       # LLM Configuration
       LLM_BASE_URL: ${LLM_BASE_URL:?LLM_BASE_URL is required}

@@ -21,7 +21,7 @@ Mobile / CC
        │
        ├──▶ Postgres (recipe data + settings)
        ├──▶ Redis (async job queue, RQ)
-       ├──▶ jarvis-ocr-service     (image → text, batch endpoint)
+       ├──▶ jarvisd OCR            (image → text: async job API + callback; legacy batch)
        ├──▶ jarvis-llm-proxy-api   (AI extraction, meal planning)
        ├──▶ MinIO / S3              (recipe images)
        └──▶ External recipe sites  (URL parsing, BeautifulSoup)
@@ -52,9 +52,9 @@ poetry run pytest --cov --cov-report=term    # CI gate is --cov-fail-under=48
 **Upstream (recipes depends on):**
 - **PostgreSQL** (required) — recipes, ingredients, meal plans, parse jobs, settings
 - **Redis** (required for async parsing + meal planning; sync CRUD works without it)
-- **jarvis-auth** (required — every domain route validates a user JWT locally, and `/settings/*` round-trips to auth)
-- **jarvis-config-service** (service discovery for auth / OCR / llm-proxy)
-- **jarvis-ocr-service** (port 7031, image parsing only)
+- **jarvis-auth** — on jarvisd, its auth listener (required — every domain route validates a user JWT locally, and `/settings/*` and `/internal/ocr/callback` round-trip to auth)
+- **jarvis-config-service** — on jarvisd, its config listener (service discovery for auth / OCR / llm-proxy, and this service's own registered URL)
+- **OCR** — jarvisd's `jarvis-ocr-service` listener (port 7031, image parsing only). The legacy Python service still works with `ocr.transport=redis`
 - **jarvis-llm-proxy-api** (port 7704, AI extraction + meal planning — `/v1/chat/completions`)
 - **MinIO/S3** (optional) — image storage
 
@@ -96,20 +96,31 @@ There is also a synchronous `POST /recipes/parse-url` that runs the same chain i
 Mobile → POST /recipes/from-image/jobs (multipart)
             │
             ├─ size-gate each upload (image.max_bytes), downscale for vision
-            ├─ upload to MinIO/S3, insert recipe_ingestions row
-            ├─ enqueue RQ job
+            ├─ upload to MinIO/S3, insert recipe_ingestions row + an "image" parse job
+            ├─ services/ocr_dispatch, by the ocr.transport setting:
+            │   "http"  → ocr_jobs_client: POST {ocr}/v1/ocr/jobs with the images inline and
+            │             callback_url = {our registry URL}/internal/ocr/callback; jarvisd's
+            │             job id is stored in job_data.ocr_job_id
+            │   "redis" → legacy LPUSH to every OCR_QUEUES queue (Python OCR workers)
             └─ 202 { ingestion_id, job_id }
 
-Worker (services/image_ingest_pipeline.py):
-   ├─ services/ocr_service_client calls jarvis-ocr-service's BATCH endpoint;
-   │  that service picks the provider (tesseract / easyocr / paddleocr / apple vision / LLM)
-   ├─ services/ocr_quality scores the combined text and gates it
+jarvisd OCR finishes → POST /internal/ocr/callback (the ocr.completed envelope, signed with
+jarvisd's own app client, retried until 2xx):
+   ├─ app creds checked via {auth}/internal/app-ping
+   ├─ envelope must name a job whose job_data.ocr_job_id matches (else 404)
+   └─ envelope enqueued UNCHANGED on jarvis.recipes.jobs (RQ id = its job_id, so a
+      redelivery still queued is not queued twice; a finished job answers "ignored")
+
+Worker (queue_worker._process_ocr_completed → ocr_join → _structure_from_readings):
+   ├─ services/ocr_quality scores the text and gates it
    ├─ llm_client.call_text_structuring turns text into a RecipeDraft (lightweight model)
    ├─ llm_client.clean_and_validate_draft tidies it
-   └─ inserts Recipe etc.
+   └─ stores the draft on the job (result_json.recipe_draft)
 
 Mobile polls GET /recipes/jobs/{job_id}
 ```
+
+The older in-worker pipeline (`image_ingest_worker` → `image_ingest_pipeline`, reached from legacy-format "image" jobs and `scripts/run_parse_worker.py`) still calls `ocr_service_client` → `/v1/ocr/batch`, which jarvisd kept.
 
 ### 3. Meal planning
 
@@ -159,16 +170,18 @@ Mobile polls GET /meal-plans/generate/jobs/{job_id}
 ## Invariants & gotchas
 
 1. **The queue worker is a separate process.** `scripts/run_rq_worker.py`. Without it, async endpoints accept jobs that never complete. Docker compose starts both. (`scripts/run_parse_worker.py` is the older DB-polling worker; nothing in compose runs it.)
-2. **OCR provider choice belongs to jarvis-ocr-service.** This service calls the batch endpoint with `provider="auto"` and gates the result with `services/ocr_quality.py` (char/line counts + a gibberish heuristic). **Don't add strict consensus rules here** — recipe images are noisy and best-effort beats high-confidence-no-result.
+2. **OCR provider choice belongs to the OCR service (jarvisd).** This service calls the batch endpoint with `provider="auto"` and gates the result with `services/ocr_quality.py` (char/line counts + a gibberish heuristic). **Don't add strict consensus rules here** — recipe images are noisy and best-effort beats high-confidence-no-result.
 3. **The extractor chain is the fallback story.** schema.org → heuristic → LLM. Sites change their DOM constantly; the LLM tier is why that doesn't page anyone. Don't break the chain.
 4. **Quantity parsing is permissive.** "1.5 cups" / "1½ cups" / "1 1/2 cup" all need to parse to `1.5` cups — unicode fractions, mixed forms, etc. **When adding a new format, write the test first.**
 5. **JWT verification accepts HS256 *and* RS256, and binds the key to the algorithm FAMILY.** jarvis-auth is migrating HS256 → RS256; a verifier pinned to one algorithm makes a staged rollout impossible, since tokens minted before the flip must keep working after it. `api/deps.py` takes the algorithm from the token header, checks it against an allowlist (so `"none"` is rejected), then picks key material by family: HS256 → `AUTH_SECRET_KEY`, RS256 → jarvis-auth's published public key.
 
    **Do not "simplify" that into one shared key variable.** The RSA public key is published at `jarvis-auth /auth/public-key` for anyone to read. If a single variable held "the key", an attacker could sign a token HS256 using that public key as the HMAC secret and be verified. `tests/test_settings.py::test_hs256_signed_with_the_public_key_is_rejected` forges exactly that by hand and must keep passing.
 
-   The RS256 public key is fetched over plain HTTP and cached for the process lifetime, so a *running* service keeps verifying if jarvis-auth goes down; only a cold start during an outage fails, and it fails closed. Implemented with `httpx` rather than `jarvis-auth-client` on purpose — this service is being decoupled from the stack, and a new Jarvis library dependency just to verify a token moves it the wrong way. `auth.algorithm` was dropped (migration `d4e5f6a7b8c9`): it only ever governed what jarvis-auth *mints*, which is not this service's business.
+   **HS256 is off unless `AUTH_SECRET_KEY` is a real secret.** jarvisd never mints HS256, so on a jarvisd install the variable is unset and every HS256 token is refused (`Settings.hs256_enabled`). It used to default to `"change-me"`, which made a token signed with that string verify.
+
+   The RS256 public key is fetched over plain HTTP and cached for the process lifetime, so a *running* service keeps verifying if jarvis-auth goes down; only a cold start during an outage fails, and it fails closed. A token whose `kid` header differs from the cached key's (jarvisd publishes `kid`; the legacy service did not) triggers one refetch, rate limited to once per 30 s — that is how a running recipes follows the legacy → jarvisd key change. Implemented with `httpx` rather than `jarvis-auth-client` on purpose — this service is being decoupled from the stack, and a new Jarvis library dependency just to verify a token moves it the wrong way. `auth.algorithm` was dropped (migration `d4e5f6a7b8c9`): it only ever governed what jarvis-auth *mints*, which is not this service's business.
 6. **Two database URLs (`DATABASE_URL` + `MIGRATIONS_DATABASE_URL`).** `apply_migrations.sh` and `scripts/make_migration.py` prefer the migration URL; it is often the host-network form while `DATABASE_URL` is the container one.
-7. **Every domain route requires a user JWT.** `deps.verify_app_auth` exists and is imported by `main.py`, but it is **not attached to any router** — app-to-app credentials do not open the recipes API. The only app-creds surface is `/settings/*` (reads via combined auth; writes are superuser-JWT only).
+7. **Every domain route requires a user JWT.** App-to-app credentials do not open the recipes API. The app-creds surfaces are `/settings/*` (reads via combined auth; writes are superuser-JWT only) and `POST /internal/ocr/callback` (`deps.verify_app_auth`, jarvisd's OCR completion), which additionally requires the envelope to name an OCR job this service submitted.
 8. **Household scoping goes through `services/scoping.py`, never a hand-written filter.** Recipes, meal plans and staples carry BOTH: `user_id` is authorship (who added it), `household_id` is visibility (who sees it). Use `visible_to(model, user)` to read and `household_for_write(user)` to stamp a new row. The predicate has a NULL arm on purpose — rows created before the household migration keep `household_id = NULL` and stay visible to their author until `scripts/backfill_household_ids.py` runs, so deploying the migration never made anyone's recipes vanish. This replaced 49 hand-written `user_id == current_user.id` filters; one missed filter is a data leak and one over-applied filter is a recipe that disappears, which is why there is exactly one predicate. A caller whose token has no household claim sees only their own rows. Denials are **404, not 403** — a distinct status confirms the id exists, which is a membership oracle.
 
    One consequence worth knowing: a duplicate can exist where a uniqueness constraint is per author. Two members each add "salt" while both rows are still `household_id = NULL` (neither write can see the other), then the backfill stamps the same household on both. Reads that must show one row have to dedupe; `staples_service.list_staples` is the worked example.
@@ -260,6 +273,7 @@ without it.
 | PUT | `/settings/{key}` | superuser JWT only |
 | POST | `/settings/sync-from-env` , `/settings/invalidate-cache` | superuser JWT only |
 | GET | `/health` | none — `{"status": "ok"}` |
+| POST | `/internal/ocr/callback` | app creds (jarvisd's own client) + a matching `ocr_job_id` |
 
 ## Data model
 
@@ -287,13 +301,14 @@ Secrets, discovery and bootstrap values only. **Runtime knobs live in the settin
 | Variable | Required | Purpose |
 |---|---|---|
 | `DATABASE_URL` / `MIGRATIONS_DATABASE_URL` | yes | Postgres |
-| `AUTH_SECRET_KEY` | yes | HS256 JWT validation (must match jarvis-auth). Still required during the RS256 migration window; once jarvis-auth mints RS256 only, this service needs no shared secret at all. |
+| `AUTH_SECRET_KEY` | no | HS256 JWT validation (must match the legacy jarvis-auth). **Unset on jarvisd** (RS256 only): unset turns HS256 off. Set-but-weak is flagged by the secret guard. |
 | `ADMIN_SECRET` | yes | `X-Admin-Secret` for the `/admin/*` seed routes |
 | `JARVIS_ENV` | no (`development`) | `production` makes weak secrets fatal at boot |
 | `JARVIS_CONFIG_URL` | yes | Service discovery |
 | `JARVIS_APP_ID` / `JARVIS_APP_KEY` | yes | Outbound app-to-app creds (llm-proxy, OCR, jarvis-logs) |
 | `JARVIS_AUTH_BASE_URL` | **required for RS256** | Auth URL, used if discovery misses. `deps._rs256_public_key()` fetches `{auth_url}/auth/public-key` from here; if neither this nor `JARVIS_CONFIG_URL` resolves, every RS256 token 401s. |
 | `JARVIS_OCR_SERVICE_URL` | optional | Gates the OCR tier in the image pipeline |
+| `RECIPES_PUBLIC_URL` | optional | Base URL jarvisd posts OCR completions to; default is this service's own discovery row (`jarvis-recipes-server`, jarvisd's Connections page) |
 | `LLM_BASE_URL` | optional | Legacy llm-proxy URL, used if discovery misses |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | required (queue) | RQ |
 | `S3_ENDPOINT_URL` / `S3_REGION` / `S3_BUCKET` / `AWS_*` | optional | MinIO/S3 for images |
@@ -312,6 +327,7 @@ Declared in `services/settings_service.py`, seeded by `alembic/versions/c3d4e5f6
 | `parse_job.abandon_minutes` | `4320` | `RECIPE_PARSE_JOB_ABANDON_MINUTES` |
 | `image.max_bytes` | `10485760` | `RECIPE_IMAGE_MAX_BYTES` |
 | `scraper.user_agent` | Chrome 124 UA | `SCRAPER_USER_AGENT` |
+| `ocr.transport` | `http` | `RECIPES_OCR_TRANSPORT` |
 
 ## Logging
 
@@ -331,7 +347,8 @@ jarvis_recipes/app/
 │   ├── deps.py                      # get_current_user (JWT), verify_app_auth (unwired)
 │   └── routes/
 │       ├── recipes.py   meal_plans.py  planner.py  stock.py  tags.py
-│       └── from_image.py  ingestion.py  import.py
+│       ├── from_image.py  ingestion.py  import.py
+│       └── ocr_callback.py          # POST /internal/ocr/callback (app creds)
 ├── core/
 │   ├── config.py                    # pydantic: secrets + bootstrap only
 │   ├── logging_config.py            # console + jarvis-logs wiring
@@ -342,7 +359,9 @@ jarvis_recipes/app/
     ├── recipes_service.py  ingestion_service.py  planner_service.py
     ├── meal_plan_service.py  parse_job_service.py  stock_service.py
     ├── llm_client.py                # llm-proxy calls + JSON repair
-    ├── ocr_service_client.py        # jarvis-ocr-service batch client
+    ├── ocr_service_client.py        # OCR batch client (sync /recipes/import/image)
+    ├── ocr_jobs_client.py           # jarvisd POST /v1/ocr/jobs + callback URL
+    ├── ocr_dispatch.py              # ocr.transport: http (jarvisd) or redis (legacy)
     ├── ocr_quality.py               # gibberish / quality gate on OCR text
     ├── image_ingest_pipeline.py     # image → OCR → draft
     ├── image_ingest_worker.py       # RQ entry point for image jobs
@@ -360,6 +379,7 @@ scripts/
 ├── run_rq_worker.py                 # the worker compose runs
 ├── run_parse_worker.py              # legacy DB-polling worker
 ├── run_cleanup.py                   # abandon stale jobs, prune stage recipes
+├── remap_users.py                   # one-time legacy → jarvisd user/household id remap
 └── make_migration.py
 alembic/versions/                    # 9 migrations
 tests/                               # 18 modules
