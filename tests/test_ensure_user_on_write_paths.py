@@ -168,12 +168,12 @@ def fk_client(fk_db, tmp_path, monkeypatch):
     from jarvis_recipes.app.api.deps import get_current_user, get_db_session, get_storage_provider
     from jarvis_recipes.app.main import create_app
     from jarvis_recipes.app.schemas.auth import CurrentUser
-    from jarvis_recipes.app.services import queue_service, s3_storage
+    from jarvis_recipes.app.services import ocr_dispatch, s3_storage
     from jarvis_recipes.app.services.storage.local import LocalStorageProvider
 
-    # Neither Redis nor MinIO is what is under test here; the database insert is.
+    # Neither OCR nor MinIO is what is under test here; the database insert is.
     monkeypatch.setattr(
-        queue_service, "enqueue_ocr_request", lambda **kwargs: 1, raising=True
+        ocr_dispatch, "dispatch", lambda db, job, images, image_refs, language="en": 1, raising=True
     )
     monkeypatch.setattr(
         s3_storage,

@@ -8,7 +8,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str = Field("sqlite:///./jarvis.db", alias="DATABASE_URL")
-    auth_secret_key: str = Field("change-me", alias="AUTH_SECRET_KEY")
+    # HS256 verification key, shared with the legacy jarvis-auth. Empty (the
+    # default) turns HS256 off entirely: jarvisd mints RS256 only, and a shipped
+    # placeholder here would let anyone who knows it forge a token.
+    auth_secret_key: str = Field("", alias="AUTH_SECRET_KEY")
     auth_algorithm: str = Field("HS256", alias="AUTH_ALGORITHM")
     media_root: Path = Path("media")
     admin_secret: str = Field("admin-secret", alias="ADMIN_SECRET")
@@ -41,6 +44,11 @@ class Settings(BaseSettings):
     aws_secret_access_key: str | None = Field(None, alias="AWS_SECRET_ACCESS_KEY")
     aws_session_token: str | None = Field(None, alias="AWS_SESSION_TOKEN")
     jarvis_ocr_service_url: str | None = Field(None, alias="JARVIS_OCR_SERVICE_URL")
+    # The base URL jarvisd's OCR should POST job completions to. Normally left
+    # unset: the jarvis-recipes-server row in discovery (jarvisd's Connections
+    # page) is that address. Set it when the registered URL is not one jarvisd
+    # can reach.
+    recipes_public_url: str | None = Field(None, alias="RECIPES_PUBLIC_URL")
     # OCR service uses same auth as LLM proxy
     # (jarvis_app_id and jarvis_app_key are reused)
     # Every OCR host gets its own queue and every image goes to all of them; the
@@ -57,6 +65,11 @@ class Settings(BaseSettings):
     redis_password: str | None = Field(None, alias="REDIS_PASSWORD")
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
+
+    @property
+    def hs256_enabled(self) -> bool:
+        """HS256 tokens are verified only against a real shared secret."""
+        return bool(self.auth_secret_key) and "AUTH_SECRET_KEY" not in self.insecure_secrets()
 
     @property
     def is_production(self) -> bool:
@@ -80,7 +93,8 @@ class Settings(BaseSettings):
             return v.lower() in placeholders or len(v) < 16
 
         problems: list[str] = []
-        if _insecure(self.auth_secret_key):
+        # Unset is fine (HS256 off, RS256 only); SET to something weak is not.
+        if self.auth_secret_key and _insecure(self.auth_secret_key):
             problems.append("AUTH_SECRET_KEY")
         if _insecure(self.admin_secret):
             problems.append("ADMIN_SECRET")

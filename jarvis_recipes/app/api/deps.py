@@ -1,3 +1,4 @@
+import time
 from typing import Optional
 
 import httpx
@@ -67,6 +68,15 @@ ASYMMETRIC_ALGORITHMS = frozenset({"RS256"})
 SUPPORTED_ALGORITHMS = SYMMETRIC_ALGORITHMS | ASYMMETRIC_ALGORITHMS
 
 _public_key_cache: str | None = None
+# The `kid` the auth service published with the cached key (jarvisd sends one;
+# the legacy jarvis-auth did not). A token naming a different kid means the key
+# changed under us -- a jarvisd that replaced the legacy auth service, or a fresh
+# install -- and is the one case worth asking again.
+_public_key_kid: str | None = None
+_last_forced_refresh: float = 0.0
+# A token with an unknown kid costs at most one key fetch per this many seconds,
+# so a stream of junk kids cannot turn into a stream of requests to auth.
+KEY_REFRESH_MIN_INTERVAL_SECONDS = 30.0
 
 
 def _rs256_public_key() -> str | None:
@@ -81,7 +91,7 @@ def _rs256_public_key() -> str | None:
     jarvis-auth goes down. Only a cold start during an outage fails, and it fails
     closed.
     """
-    global _public_key_cache
+    global _public_key_cache, _public_key_kid
     if _public_key_cache:
         return _public_key_cache
 
@@ -92,10 +102,35 @@ def _rs256_public_key() -> str | None:
         with httpx.Client(timeout=5.0) as client:
             resp = client.get(f"{auth_url.rstrip('/')}/auth/public-key")
             resp.raise_for_status()
-            _public_key_cache = resp.json().get("public_key")
-    except (httpx.HTTPError, ValueError):
+            body = resp.json()
+            _public_key_cache = body.get("public_key")
+            _public_key_kid = body.get("kid") if _public_key_cache else None
+    except (httpx.HTTPError, ValueError, AttributeError):
         return None
     return _public_key_cache
+
+
+def _refresh_rs256_public_key() -> str | None:
+    """Fetch the key again, keeping the cached one if the fetch fails.
+
+    Rate limited: returns the cached key without a request when the last forced
+    refresh was under KEY_REFRESH_MIN_INTERVAL_SECONDS ago.
+    """
+    global _public_key_cache, _public_key_kid, _last_forced_refresh
+    now = time.monotonic()
+    if _public_key_cache and now - _last_forced_refresh < KEY_REFRESH_MIN_INTERVAL_SECONDS:
+        return _public_key_cache
+    _last_forced_refresh = now
+    previous, previous_kid = _public_key_cache, _public_key_kid
+    _public_key_cache, _public_key_kid = None, None
+    try:
+        fresh = _rs256_public_key()
+    except ValueError:
+        fresh = None
+    if not fresh:
+        _public_key_cache, _public_key_kid = previous, previous_kid
+        return previous
+    return fresh
 
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> CurrentUser:
@@ -117,7 +152,16 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             if not key:
                 # Fail CLOSED — an RS256 token we cannot check is not accepted.
                 raise JWTError("No RS256 public key available")
+            token_kid = header.get("kid")
+            if token_kid and token_kid != _public_key_kid:
+                key = _refresh_rs256_public_key() or key
         else:
+            # HS256 only against a real shared secret. jarvisd never mints
+            # HS256, so on a jarvisd install AUTH_SECRET_KEY is unset and this
+            # branch rejects everything -- rather than verifying against an
+            # empty or placeholder key anyone could sign with.
+            if not settings.hs256_enabled:
+                raise JWTError("HS256 is disabled: AUTH_SECRET_KEY is not set")
             key = settings.auth_secret_key
 
         payload = jwt.decode(credentials.credentials, key, algorithms=[algorithm])

@@ -29,6 +29,7 @@ _ENV_VAR_FALLBACKS: dict[str, str] = {
     "jarvis-auth": "JARVIS_AUTH_BASE_URL",
     "jarvis-ocr-service": "JARVIS_OCR_URL",
     "jarvis-llm-proxy-api": "JARVIS_LLM_PROXY_API_URL",
+    "jarvis-recipes-server": "RECIPES_PUBLIC_URL",
 }
 
 _initialized: bool = False
@@ -160,3 +161,12 @@ def get_ocr_url() -> str:
 def get_llm_proxy_url() -> str:
     """Get LLM proxy service URL."""
     return _get_url("jarvis-llm-proxy-api")
+
+
+def get_recipes_url() -> str:
+    """This service's own URL as registered in discovery.
+
+    It is the address other services (jarvisd's OCR callbacks) reach us at, so
+    it comes from the registry row an admin added, not from anything we see.
+    """
+    return _get_url("jarvis-recipes-server")

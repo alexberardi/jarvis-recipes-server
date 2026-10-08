@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 
 from redis import Redis
 from rq import Queue
+from rq.job import Job
 
 from jarvis_recipes.app.core.config import get_settings
 
@@ -312,6 +313,33 @@ def enqueue_ocr_completion(
         request_id=request_id,
         parent_job_id=parent_job_id or workflow_id,
     )
+
+
+def enqueue_completion_envelope(envelope: Dict[str, Any]) -> bool:
+    """Put an `ocr.completed` envelope that arrived over HTTP on our RQ queue.
+
+    jarvisd's OCR POSTs the same envelope the Python OCR worker used to enqueue
+    as a pickled RQ job, so it goes onto the queue as-is and queue_worker handles
+    it exactly as before. The RQ job id is the envelope's own job_id (jarvisd's
+    completion id, stable across its retries), so a redelivered callback that is
+    still waiting in the queue is not queued twice.
+
+    Returns False when that job is already queued.
+    """
+    job_id = str(envelope["job_id"])
+    conn = get_redis_connection()
+    if Job.exists(job_id, connection=conn):
+        logger.info("OCR completion %s already queued; ignoring redelivery", job_id)
+        return False
+    queue = get_queue(QUEUE_RECIPES)
+    queue.enqueue(
+        "jarvis_recipes.app.services.queue_worker.process_job",
+        json.dumps(envelope),
+        job_id=job_id,
+        job_timeout="10m",
+    )
+    logger.info("Enqueued OCR completion %s (workflow %s) to %s", job_id, envelope.get("workflow_id"), QUEUE_RECIPES)
+    return True
 
 
 def enqueue_job(

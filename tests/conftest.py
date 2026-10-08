@@ -1,3 +1,10 @@
+import os
+
+# HS256 is off unless AUTH_SECRET_KEY is a real secret (jarvisd mints RS256
+# only). The suite mints most of its tokens HS256, so give it one before any
+# test reads the cached settings.
+os.environ.setdefault("AUTH_SECRET_KEY", "test-only-hs256-secret-0123456789abcdef")
+
 import pytest
 from fastapi.testclient import TestClient
 from jose import jwt

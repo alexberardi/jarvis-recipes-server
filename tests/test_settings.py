@@ -37,6 +37,7 @@ PRUNE_MIGRATIONS = [
     _VERSIONS / "c3d4e5f6a7b8_prune_phantom_settings_seed_real_knobs.py",
     _VERSIONS / "d4e5f6a7b8c9_drop_auth_algorithm.py",
     _VERSIONS / "b8c9d0e1f2a3_seed_background_model_name.py",
+    _VERSIONS / "f1a2b3c4d5e6_seed_ocr_transport.py",
 ]
 
 
@@ -103,6 +104,8 @@ class TestSettingsDefinitions:
             "parse_job.abandon_minutes",
             "image.max_bytes",
             "scraper.user_agent",
+            # Photo-import OCR hand-off: "http" (jarvisd) or "redis" (legacy).
+            "ocr.transport",
         }
 
     def test_auth_algorithm_does_not_come_back(self):

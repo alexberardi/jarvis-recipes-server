@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from jarvis_recipes.app.api.deps import get_current_user, get_db_session
 from jarvis_recipes.app.db import models
 from jarvis_recipes.app.schemas.auth import CurrentUser
-from jarvis_recipes.app.services import parse_job_service, queue_service, s3_storage
+from jarvis_recipes.app.services import ocr_dispatch, parse_job_service, s3_storage
+from jarvis_recipes.app.services.ocr_jobs_client import OcrImage, OcrSubmitError
 from jarvis_recipes.app.services.settings_service import (
     DEFAULT_IMAGE_MAX_BYTES,
     get_settings_service,
@@ -53,6 +54,7 @@ async def submit_recipe_from_image_job(
     ingestion_id = str(uuid.uuid4())
     s3_keys = []
     s3_uris = []  # Store full URIs for queue messages
+    ocr_images: list[OcrImage] = []  # The same bytes, sent inline to jarvisd's OCR
     def _resize_for_vision(data: bytes) -> bytes:
         """
         Resize image to stay within recommended pixel budget for vision models.
@@ -106,6 +108,7 @@ async def submit_recipe_from_image_job(
             key, uri = s3_storage.upload_image(str(current_user.id), ingestion_id, idx, file, data_override=resized)
             s3_keys.append(key)
             s3_uris.append(uri)
+            ocr_images.append(OcrImage(data=resized, content_type="image/jpeg"))
             file.file.seek(0)
         except HTTPException:
             raise
@@ -149,18 +152,21 @@ async def submit_recipe_from_image_job(
     for idx, s3_uri in enumerate(s3_uris):
         image_refs.append({"kind": "s3", "value": s3_uri, "index": idx})
     
-    # Fanned out to every OCR host; the readings are joined before the LLM sees
-    # them. `sent` is recorded on the ingestion so the join knows how many hosts
-    # to wait for -- reading it from config at join time would misbehave when
-    # config changes while a job is in flight.
-    sent = queue_service.enqueue_ocr_request(
-        workflow_id=job.id,  # Use job.id as workflow_id for simple workflows
-        job_id=job.id,
-        image_refs=image_refs,
-        options={"language": "en"},
-        request_id=None,  # Could add request_id from headers if available
-    )
-    
+    # How many readings the join waits for: one from jarvisd, or one per legacy
+    # OCR host when ocr.transport is "redis". Recorded on the ingestion so the
+    # join does not re-read config while the job is in flight.
+    try:
+        sent = ocr_dispatch.dispatch(db, job, ocr_images, image_refs, language="en")
+    except OcrSubmitError as exc:
+        logger.error("from-image OCR submit failed for job %s: %s", job.id, exc)
+        parse_job_service.mark_error(db, job, "ocr_submit_failed", str(exc))
+        ingestion.status = "FAILED"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not hand the photo to OCR: {exc}",
+        ) from exc
+
     ingestion.ocr_expected = sent
     db.commit()
 

@@ -26,6 +26,13 @@ DEFAULT_SCRAPER_USER_AGENT = (
 
 DEFAULT_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 
+# How a photo import reaches OCR. "http": jarvisd's job API with a callback
+# (services/ocr_jobs_client). "redis": the legacy LPUSH onto jarvis.ocr.jobs for
+# the Python jarvis-ocr-service workers, kept only for a stack not yet on jarvisd.
+OCR_TRANSPORT_HTTP = "http"
+OCR_TRANSPORT_REDIS = "redis"
+DEFAULT_OCR_TRANSPORT = OCR_TRANSPORT_HTTP
+
 
 # Recipes settings definitions
 # NOTE: `auth.algorithm` was removed 2026-08-23. It only ever gated JWT
@@ -94,6 +101,15 @@ SETTINGS_DEFINITIONS: list[SettingDefinition] = [
         default=DEFAULT_IMAGE_MAX_BYTES,
         description="Maximum accepted size of a single uploaded recipe image, in bytes",
         env_fallback="RECIPE_IMAGE_MAX_BYTES",
+    ),
+    # Read by services/ocr_dispatch.py for every photo import.
+    SettingDefinition(
+        key="ocr.transport",
+        category="ocr",
+        value_type="string",
+        default=DEFAULT_OCR_TRANSPORT,
+        description="How photo imports reach OCR: 'http' (jarvisd job API + callback) or 'redis' (legacy jarvis-ocr-service queue)",
+        env_fallback="RECIPES_OCR_TRANSPORT",
     ),
     # Read by services/url_parsing/html_fetcher.py.
     SettingDefinition(
