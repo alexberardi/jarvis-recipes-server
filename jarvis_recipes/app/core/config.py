@@ -2,8 +2,21 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def pin_psycopg2(database_url: str) -> str:
+    """Name the psycopg2 driver on a bare ``postgresql://`` URL.
+
+    SQLAlchemy 2.1 made psycopg (v3) the default driver for ``postgresql://``;
+    this service ships psycopg2, so a bare URL would fail to import a driver.
+    The deploy docs show bare URLs, so pin here. URLs that already name a
+    driver (``postgresql+...``) are left alone.
+    """
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    return database_url
 
 
 class Settings(BaseSettings):
@@ -57,6 +70,11 @@ class Settings(BaseSettings):
     redis_password: str | None = Field(None, alias="REDIS_PASSWORD")
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
+
+    @field_validator("database_url")
+    @classmethod
+    def _pin_psycopg2(cls, value: str) -> str:
+        return pin_psycopg2(value)
 
     @property
     def is_production(self) -> bool:
